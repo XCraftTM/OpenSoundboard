@@ -16,7 +16,7 @@
   "depends": {
     "fabricloader": ">=${loader_version}",
     "fabric-api": "*",
-    "minecraft": "${minecraft_version}",
+    "minecraft": ">=1.21 <1.21.2",
     "voicechat": ">=${voicechat_version}",
     "owo-lib": ">=${owo_version}"
   }
