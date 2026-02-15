@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "opensoundboard",
+  "version": "${version}",
+
+  "name": "OpenSoundboard",
+  "description": "A feature-rich soundboard mod for Simple Voice Chat, providing high-quality audio playback and easy management.",
+  "authors": [
+    "XCraftTM"
+  ],
+  "contact": {},
+
+  "license": "MIT",
+  "icon": "assets/opensoundboard/icon.png",
+
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "de.xcrafttm.opensoundboard.OpenSoundboardClient"
+    ],
+    "voicechat": [
+      "de.xcrafttm.opensoundboard.integration.SoundboardPlugin"
+    ],
+    "modmenu": [
+      "de.xcrafttm.opensoundboard.integration.ModMenuIntegration"
+    ]
+  },
+
+  "custom": {
+    "modmenu": {
+      "links": {
+        "modmenu.discord": "https://discord.gg/jEGF5fb"
+      },
+      "badges": [ "client" ],
+      "id": "soundboard",
+      "name": "Open Soundboard",
+      "description": "A feature-rich soundboard mod for Simple Voice Chat, providing high-quality audio playback and easy management.odular example library",
+      "icon": "assets/opensoundboard/icon.png",
+      "update_checker": false
+    }
+  },
+
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}",
+    "voicechat": ">=${voicechat_version}",
+    "owo-lib": ">=${owo_version}"
+  }
+}

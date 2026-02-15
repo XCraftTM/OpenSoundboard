@@ -1,0 +1,31 @@
+plugins {
+    id 'java-library'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+processResources {
+    // :common is a plain library, not a Fabric mod
+    exclude('fabric.mod.json')
+}
+
+jar {
+    // Safety: never ship a fabric.mod.json from this module
+    exclude('fabric.mod.json')
+}
+
+dependencies {
+    // config serialization
+    api 'com.google.code.gson:gson:2.11.0'
+
+    // for FabricLoader config dir
+    compileOnly 'net.fabricmc:fabric-loader:0.18.4'
+
+    // lombok (used by config models)
+    compileOnly 'org.projectlombok:lombok:1.18.34'
+    annotationProcessor 'org.projectlombok:lombok:1.18.34'
+}

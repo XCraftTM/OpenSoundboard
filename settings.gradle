@@ -1,0 +1,27 @@
+pluginManagement {
+    repositories {
+        maven {
+            name = 'Fabric'
+            url = 'https://maven.fabricmc.net/'
+        }
+        // Needed for fabric-loom plugin resolution
+        mavenCentral()
+        gradlePluginPortal()
+    }
+
+    plugins {
+        id 'fabric-loom' version '1.15.3'
+    }
+}
+
+rootProject.name = 'OpenSoundboard'
+
+include('common')
+include('common-mc')
+
+include('versions:v1_21_10')
+include('versions:v1_21_11')
+include('versions:v1_21_8')
+include('versions:v1_21_5')
+include('versions:v1_21_4')
+include('versions:v1_21_1')
