@@ -67,6 +67,11 @@ processResources {
     }
 }
 
+jar {
+    from(project(':common').sourceSets.main.output)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 java {
     withSourcesJar()
 }

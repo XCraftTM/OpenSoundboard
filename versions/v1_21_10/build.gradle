@@ -78,6 +78,7 @@ processResources {
 // Ensure jar contains processed resources (including fabric.mod.json)
 jar {
     from(sourceSets.main.output)
+    from(project(':common').sourceSets.main.output)
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 

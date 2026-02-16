@@ -84,6 +84,7 @@ processResources {
 
 // Let Loom handle jar contents; don't override jar with sourceSets output directly
 jar {
+    from(project(':common').sourceSets.main.output)
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 

@@ -1,5 +1,21 @@
 plugins {
     id 'maven-publish'
+    id 'com.modrinth.minotaur' apply false
+}
+
+// Load .env file if present (for MODRINTH_TOKEN, etc.)
+file('.env').with { envFile ->
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            def trimmed = line.trim()
+            if (trimmed && !trimmed.startsWith('#') && trimmed.contains('=')) {
+                def (key, value) = trimmed.split('=', 2)
+                if (!System.getenv(key.trim())) {
+                    ext.set(key.trim(), value.trim())
+                }
+            }
+        }
+    }
 }
 
 version = project.mod_version
@@ -63,6 +79,53 @@ tasks.register('buildAllVersions') {
             ':versions:v1_21_4:build',
             ':versions:v1_21_1:build'
     )
+}
+
+// ---------------------------------------------------------------------------
+// Modrinth publishing (minotaur) — configure each version subproject
+// ---------------------------------------------------------------------------
+def versionProjects = subprojects.findAll { it.path.startsWith(':versions:') }
+
+versionProjects.each { versionProj ->
+    versionProj.plugins.apply('com.modrinth.minotaur')
+
+    versionProj.afterEvaluate {
+        versionProj.modrinth {
+            token = System.getenv('MODRINTH_TOKEN') ?: (rootProject.ext.has('MODRINTH_TOKEN') ? rootProject.ext.get('MODRINTH_TOKEN') : '')
+            projectId = rootProject.property('modrinth_project_id')
+            versionNumber = versionProj.version.toString()
+            versionName = "OpenSoundboard ${versionProj.version}"
+            versionType = rootProject.findProperty('releaseType') ?: 'release'
+            changelog = rootProject.findProperty('changelog') ?: ''
+
+            uploadFile = versionProj.tasks.named('remapJar')
+
+            // Game versions: use per-module override if present, otherwise the single minecraft_version
+            def gameVers = versionProj.findProperty('modrinth_game_versions')
+            if (gameVers) {
+                gameVersions = gameVers.toString().split(',').collect { it.trim() }
+            } else {
+                gameVersions = [versionProj.property('minecraft_version').toString()]
+            }
+
+            loaders = ['fabric']
+
+            dependencies {
+                required.project 'fabric-api'
+                required.project 'simple-voice-chat'
+                required.project 'owo-lib'
+                optional.project 'modmenu'
+            }
+        }
+    }
+}
+
+// Aggregate task to publish all versions at once
+tasks.register('publishToModrinth') {
+    group = 'publishing'
+    description = 'Publishes all version JARs to Modrinth'
+
+    dependsOn versionProjects.collect { ":${it.path.substring(1)}:modrinth" }
 }
 
 // Collect all version JARs into build/jars/
