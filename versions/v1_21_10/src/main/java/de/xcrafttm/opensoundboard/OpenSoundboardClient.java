@@ -31,7 +31,7 @@ public class OpenSoundboardClient implements ClientModInitializer {
                 "key.opensoundboard.open",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_U,
-                KeyBinding.Category.create(Identifier.of("category.opensoundboard.general"))
+                KeyBinding.Category.create(Identifier.of("opensoundboard", "general"))
         ));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

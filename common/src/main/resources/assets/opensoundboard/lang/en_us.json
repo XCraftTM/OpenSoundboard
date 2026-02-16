@@ -1,7 +1,8 @@
 {
   "title.opensoundboard.config": "OpenSoundboard Config",
 
-  "category.opensoundboard.general": "General",
+  "category.opensoundboard.general": "OpenSoundboard",
+  "key.category.opensoundboard.general": "OpenSoundboard",
 
   "key.opensoundboard.open": "Open Soundboard",
 
