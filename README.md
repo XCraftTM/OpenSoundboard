@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/XCraftTM/OpenSoundboard/blob/master/logo.png" width="128" alt="OpenSoundboard icon">
+  <img src="https://github.com/XCraftTM/OpenSoundboard/blob/master/logo.png?raw=true" width="128" alt="OpenSoundboard icon">
 </p>
 
 <h1 align="center">OpenSoundboard</h1>
