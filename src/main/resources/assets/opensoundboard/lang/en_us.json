@@ -40,6 +40,13 @@
   "option.opensoundboard.loopAll": "Loop All",
   "tooltip.opensoundboard.loopAll": "Loops all sounds indefinitely.",
 
+  "option.opensoundboard.skipAmount": "Skip Amount",
+
+  "option.opensoundboard.keybindMode": "Keybind Mode",
+  "option.opensoundboard.keybindMode.play_stop": "Play/Stop",
+  "option.opensoundboard.keybindMode.pause_resume": "Pause/Resume",
+  "option.opensoundboard.keybindMode.play_restart": "Restart",
+
   "gui.opensoundboard.title": "Soundboard",
   "text.soundboard.title": "\u00a7f\u00a7lSoundboard",
 

@@ -20,6 +20,9 @@ import org.jetbrains.annotations.NotNull;
  */
 public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
 
+    private static final int[] SKIP_OPTIONS = {1, 3, 5, 10, 15, 30};
+    private static final String[] KEYBIND_MODES = {"play_stop", "pause_resume", "play_restart"};
+
     private final Screen parent;
 
     private FlowLayout globalVolumeSection;
@@ -130,6 +133,13 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                 }
         ));
 
+        panel.child(cycleRow(
+                Text.translatable("option.opensoundboard.skipAmount"),
+                SoundboardConfig.data.getSkipAmountSeconds()
+        ));
+
+        panel.child(keybindModeRow());
+
         root.child(panel);
 
         var buttons = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(columnWidth), Sizing.content())
@@ -209,6 +219,68 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
 
     private interface BoolConsumer {
         void accept(boolean v);
+    }
+
+    private FlowLayout cycleRow(Text label, int initialValue) {
+        var row = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.content())
+                .gap(6)
+                .verticalAlignment(VerticalAlignment.CENTER);
+
+        var btn = Components.button(skipLabel(initialValue), b -> {
+            int current = SoundboardConfig.data.getSkipAmountSeconds();
+            int nextIndex = 0;
+            for (int i = 0; i < SKIP_OPTIONS.length; i++) {
+                if (SKIP_OPTIONS[i] == current) {
+                    nextIndex = (i + 1) % SKIP_OPTIONS.length;
+                    break;
+                }
+            }
+            int next = SKIP_OPTIONS[nextIndex];
+            SoundboardConfig.data.setSkipAmountSeconds(next);
+            SoundboardConfig.save();
+            b.setMessage(skipLabel(next));
+        });
+        btn.sizing(Sizing.fixed(60), Sizing.content());
+
+        row.child(btn);
+        row.child(Components.label(label));
+
+        return row;
+    }
+
+    private FlowLayout keybindModeRow() {
+        var row = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.content())
+                .gap(6)
+                .verticalAlignment(VerticalAlignment.CENTER);
+
+        var btn = Components.button(keybindModeLabel(SoundboardConfig.data.getKeybindMode()), b -> {
+            String current = SoundboardConfig.data.getKeybindMode();
+            int nextIndex = 0;
+            for (int i = 0; i < KEYBIND_MODES.length; i++) {
+                if (KEYBIND_MODES[i].equals(current)) {
+                    nextIndex = (i + 1) % KEYBIND_MODES.length;
+                    break;
+                }
+            }
+            String next = KEYBIND_MODES[nextIndex];
+            SoundboardConfig.data.setKeybindMode(next);
+            SoundboardConfig.save();
+            b.setMessage(keybindModeLabel(next));
+        });
+        btn.sizing(Sizing.fixed(90), Sizing.content());
+
+        row.child(btn);
+        row.child(Components.label(Text.translatable("option.opensoundboard.keybindMode")));
+
+        return row;
+    }
+
+    private static Text keybindModeLabel(String mode) {
+        return Text.translatable("option.opensoundboard.keybindMode." + mode).formatted(Formatting.AQUA);
+    }
+
+    private static Text skipLabel(int seconds) {
+        return Text.literal(seconds + "s").formatted(Formatting.AQUA);
     }
 
     private FlowLayout toggleRow(Text label, boolean initial, BoolConsumer onChange) {

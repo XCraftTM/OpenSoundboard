@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/XCraftTM/OpenSoundboard/blob/master/common/src/main/resources/assets/opensoundboard/icon.png?raw=true" width="128" alt="OpenSoundboard icon">
+  <img src="https://github.com/XCraftTM/OpenSoundboard/blob/master/logo.png" width="128" alt="OpenSoundboard icon">
 </p>
 
 <h1 align="center">OpenSoundboard</h1>
@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/XCraftTM/OpenSoundboard/blob/main/LICENSE.txt"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green"></a>
+  <a href="https://raw.githubusercontent.com/XCraftTM/OpenSoundboard/refs/heads/master/LICENSE.txt"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green"></a>
   <img alt="Client-side" src="https://img.shields.io/badge/environment-client-blue">
   <img alt="Fabric" src="https://img.shields.io/badge/mod loader-Fabric-dbd0b4">
 </p>
@@ -85,6 +85,10 @@
 ```
 
 The release-ready JARs for every supported Minecraft version will be in `build/jars/`.
+
+## Credits
+
+Thanks KamiKMB for creating the amazing Logo for the Mod.
 
 ## License
 

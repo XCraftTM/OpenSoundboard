@@ -43,6 +43,7 @@ public class SoundboardConfig {
     boolean loopAll = false;
     boolean syncAudio = false;
     int skipAmountSeconds = 5;
+    String keybindMode = "play_stop";
 
     private static void ensureConfigDir() {
         if (!BASE_DIR.exists()) {

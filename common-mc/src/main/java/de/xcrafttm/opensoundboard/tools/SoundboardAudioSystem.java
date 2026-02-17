@@ -284,10 +284,28 @@ public final class SoundboardAudioSystem {
         return 0;
     }
 
+    public static long getTimeMillis(String file) {
+        for (PlayingSound s : activeSounds) {
+            if (s.name.equals(file)) {
+                return s.timeMillis();
+            }
+        }
+        return 0;
+    }
+
     public static int getDurationSeconds(String file) {
         for (PlayingSound s : activeSounds) {
             if (s.name.equals(file)) {
                 return s.durationSeconds();
+            }
+        }
+        return 0;
+    }
+
+    public static long getDurationMillis(String file) {
+        for (PlayingSound s : activeSounds) {
+            if (s.name.equals(file)) {
+                return s.durationMillis();
             }
         }
         return 0;
@@ -399,8 +417,16 @@ public final class SoundboardAudioSystem {
             return cursor / 48000;
         }
 
+        public long timeMillis() {
+            return (long) cursor * 1000L / 48000L;
+        }
+
         public int durationSeconds() {
             return samples.length / 48000;
+        }
+
+        public long durationMillis() {
+            return (long) samples.length * 1000L / 48000L;
         }
 
         public void setCursor(float progress) {

@@ -63,6 +63,9 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     private File lastClickedFile = null;
     private long lastClickMs = 0;
 
+    // deferred scroll target – layout isn't ready during build()
+    private String pendingScrollTarget = null;
+
     private static final int FAV_WIDTH = 20;
     private static final int PLAY_WIDTH = 35;
 
@@ -215,13 +218,13 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         // Timeline slider
         timelineSlider = UIComponents.slider(Sizing.fill()).message(v -> {
             var file = selectedFile;
-            if (file == null) return Text.literal("0:00 / 0:00");
+            if (file == null) return Text.literal("0:00.0 / 0:00.0");
 
             String key = file.getName();
-            int duration = SoundboardAudioSystem.getDurationSeconds(key);
-            int passed = SoundboardAudioSystem.getTimeSeconds(key);
+            long durationMs = SoundboardAudioSystem.getDurationMillis(key);
+            long passedMs = SoundboardAudioSystem.getTimeMillis(key);
 
-            if (duration > 0) {
+            if (durationMs > 0) {
                 // If not currently playing, estimate passed from slider position for a stable tooltip
                 if (!SoundboardAudioSystem.isPlaying(key)) {
                     float progress;
@@ -231,16 +234,16 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
                         progress = 0f;
                     }
                     progress = Math.max(0f, Math.min(1f, progress));
-                    passed = Math.max(0, Math.min(duration, Math.round(progress * duration)));
+                    passedMs = Math.max(0, Math.min(durationMs, Math.round(progress * durationMs)));
                 } else {
-                    passed = Math.max(0, Math.min(duration, passed));
+                    passedMs = Math.max(0, Math.min(durationMs, passedMs));
                 }
-                int left = Math.max(0, duration - passed);
-                return Text.literal(GuiTools.formatTimeSeconds(passed) + " / -" + GuiTools.formatTimeSeconds(left));
+                long leftMs = Math.max(0, durationMs - passedMs);
+                return Text.literal(GuiTools.formatTimeMillis(passedMs) + " / -" + GuiTools.formatTimeMillis(leftMs));
             }
 
             // unknown duration
-            return Text.literal(GuiTools.formatTimeSeconds(Math.max(0, passed)) + " / -0:00");
+            return Text.literal(GuiTools.formatTimeMillis(Math.max(0, passedMs)) + " / -0:00.0");
         });
         timelineSlider.onChanged().subscribe(value -> {
             var file = selectedFile;
@@ -272,13 +275,13 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             if (file == null) return;
             if (!SoundboardAudioSystem.isPlaying(file.getName())) return;
 
-            int seconds = GuiTools.parseTimeSeconds(text);
-            if (seconds < 0) return;
+            long millis = GuiTools.parseTimeMillis(text);
+            if (millis < 0) return;
 
-            int duration = SoundboardAudioSystem.getDurationSeconds(file.getName());
+            long duration = SoundboardAudioSystem.getDurationMillis(file.getName());
             if (duration <= 0) return;
 
-            float progress = Math.max(0f, Math.min(1f, seconds / (float) duration));
+            float progress = Math.max(0f, Math.min(1f, millis / (float) duration));
             SoundboardAudioSystem.setCursor(file.getName(), progress);
         });
 
@@ -354,8 +357,8 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             var file = new File(OpenSoundboardClient.soundDir, activeName);
             if (file.exists()) {
                 selectSound(file);
-                // After selecting, scroll the list to the active sound
-                scrollToSound(activeName);
+                // Defer scroll to first tick() when layout is ready
+                pendingScrollTarget = activeName;
             }
         }
 
@@ -530,7 +533,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             forwardBtn.active(false);
 
             timelineSlider.value(0);
-            if (!timeField.isFocused()) timeField.setText("0:00");
+            if (!timeField.isFocused()) timeField.setText("0:00.0");
         } else {
             var data = SoundboardConfig.get(file.getName());
 
@@ -558,10 +561,10 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             if (isPlaying) {
                 timelineSlider.value(SoundboardAudioSystem.getProgress(file.getName()));
                 if (!timeField.isFocused())
-                    timeField.setText(GuiTools.formatTimeSeconds(SoundboardAudioSystem.getTimeSeconds(file.getName())));
+                    timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
             } else {
                 timelineSlider.value(0);
-                if (!timeField.isFocused()) timeField.setText("0:00");
+                if (!timeField.isFocused()) timeField.setText("0:00.0");
             }
             pauseBtn.setMessage(SoundboardAudioSystem.isPaused(file.getName()) ? Text.literal("▶") : Text.literal("⏸"));
         }
@@ -577,15 +580,23 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
         if (SoundboardConfig.data.isSyncAudio()) {
             float vol = (local != null ? local.floatValue() : (player != null ? player.floatValue() : 1f));
+            // Apply to ALL sounds when sync is enabled
+            for (var entry : SoundboardConfig.sounds().entrySet()) {
+                entry.getValue().setLocalVolume(vol);
+                entry.getValue().setPlayerVolume(vol);
+                SoundboardAudioSystem.setVolume(entry.getKey(), vol, vol);
+            }
+            // Also update the selected sound (in case it wasn't in the stored map yet)
             data.setLocalVolume(vol);
             data.setPlayerVolume(vol);
+            SoundboardAudioSystem.setVolume(file.getName(), vol, vol);
         } else {
             if (local != null) data.setLocalVolume(local.floatValue());
             if (player != null) data.setPlayerVolume(player.floatValue());
+            SoundboardAudioSystem.setVolume(file.getName(), data.getLocalVolume(), data.getPlayerVolume());
         }
 
         SoundboardConfig.save();
-        SoundboardAudioSystem.setVolume(file.getName(), data.getLocalVolume(), data.getPlayerVolume());
     }
 
     private void updateBindButtonText(SoundboardConfig.KeyBind keyBind) {
@@ -657,6 +668,11 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     public void tick() {
         super.tick();
 
+        if (pendingScrollTarget != null) {
+            scrollToSound(pendingScrollTarget);
+            pendingScrollTarget = null;
+        }
+
         refreshDetailsUiState();
         refreshListVisuals();
     }
@@ -688,12 +704,12 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
                 if (p >= 0) timelineSlider.value(p);
             }
             if (!timeField.isFocused()) {
-                timeField.setText(GuiTools.formatTimeSeconds(SoundboardAudioSystem.getTimeSeconds(file.getName())));
+                timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
             }
             pauseBtn.setMessage(SoundboardAudioSystem.isPaused(file.getName()) ? Text.literal("▶") : Text.literal("⏸"));
         } else {
             if (!timelineSlider.isFocused()) timelineSlider.value(0);
-            if (!timeField.isFocused()) timeField.setText("0:00");
+            if (!timeField.isFocused()) timeField.setText("0:00.0");
         }
 
         loopBtn.setMessage(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()));

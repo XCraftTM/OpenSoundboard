@@ -2,6 +2,7 @@ package de.xcrafttm.opensoundboard;
 
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.screens.SoundboardScreen;
+import de.xcrafttm.opensoundboard.tools.KeybindHandler;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -37,6 +38,7 @@ public class OpenSoundboardClient implements ClientModInitializer {
             while (openSoundboardKey.wasPressed()) {
                 client.setScreen(new SoundboardScreen());
             }
+            KeybindHandler.tick(client, soundDir);
         });
     }
 }
