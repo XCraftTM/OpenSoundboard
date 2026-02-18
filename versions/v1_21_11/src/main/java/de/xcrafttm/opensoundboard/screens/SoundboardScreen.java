@@ -118,7 +118,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
         topButtons.child(UIComponents.button(
                 Text.translatable("gui.opensoundboard.config"),
-                b -> client.setScreen(ModMenuIntegration.getConfigScreen(this))
+                b -> client.setScreen(new SoundboardConfigScreen(this))
         ).sizing(Sizing.fixed(buttonW), Sizing.content()));
 
         topButtons.child(UIComponents.button(

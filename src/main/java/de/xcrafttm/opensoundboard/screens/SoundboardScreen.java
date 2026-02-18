@@ -2,7 +2,7 @@ package de.xcrafttm.opensoundboard.screens;
 
 import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
-import de.xcrafttm.opensoundboard.integration.ModMenuIntegration;
+import de.xcrafttm.opensoundboard.screens.SoundboardConfigScreen;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
@@ -118,7 +118,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
         topButtons.child(UIComponents.button(
                 Text.translatable("gui.opensoundboard.config"),
-                b -> client.setScreen(ModMenuIntegration.getConfigScreen(this))
+                b -> client.setScreen(new SoundboardConfigScreen(this))
         ).sizing(Sizing.fixed(buttonW), Sizing.content()));
 
         topButtons.child(UIComponents.button(
