@@ -460,7 +460,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
         rowWidgets.put(key, new RowWidgets(favBtn, nameLabel, playBtn));
 
-        row.mouseDown().subscribe((mouseX, mouseY, button) -> {
+        row.mouseDown().subscribe((mouseX, mouseY) -> {
             selectSound(file);
 
             long now = System.currentTimeMillis();
@@ -611,7 +611,11 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
+        int keyCode = input.key();
+        int scanCode = input.scancode();
+        int modifiers = input.modifiers();
+
         // enter-to-play-first while searching (legacy)
         if (queryField.isFocused() && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
             if (!results.isEmpty()) {
@@ -646,14 +650,14 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             return true;
         }
 
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(input);
     }
 
     @Override
-    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+    public boolean keyReleased(net.minecraft.client.input.KeyInput input) {
         if (isBinding && selectedFile != null) {
             // We only get the current modifier state, so we use 'modifiers == 0' as "all released"
-            if (modifiers == 0) {
+            if (input.modifiers() == 0) {
                 var data = SoundboardConfig.get(selectedFile.getName());
                 data.setKeybind(pendingKeybind);
                 pendingKeybind = null;
@@ -664,7 +668,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             }
             return true;
         }
-        return super.keyReleased(keyCode, scanCode, modifiers);
+        return super.keyReleased(input);
     }
 
     @Override
