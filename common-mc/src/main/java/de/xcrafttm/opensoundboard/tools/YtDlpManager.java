@@ -189,7 +189,7 @@ public final class YtDlpManager {
         if (name == null) return "";
         String s = name.replace('_', ' ');
         // remove disallowed chars
-        s = s.replaceAll("[^A-Za-z0-9\\-\\s\\(\\)\\[\\]]", "");
+        s = s.replaceAll("[^A-Za-z0-9äöüÄÖÜß.\\-\\s\\(\\)\\[\\]]", "");
         // collapse whitespace
         s = s.replaceAll("\\s+", " ").trim();
         return s;

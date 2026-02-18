@@ -41,8 +41,10 @@
   "tooltip.opensoundboard.loopAll": "Loops all sounds indefinitely.",
 
   "option.opensoundboard.skipAmount": "Skip Amount",
+  "tooltip.opensoundboard.skipAmount": "How many seconds to skip forward or backward.",
 
   "option.opensoundboard.keybindMode": "Keybind Mode",
+  "tooltip.opensoundboard.keybindMode": "What happens when a keybind is pressed while a sound is playing.",
   "option.opensoundboard.keybindMode.play_stop": "Play/Stop",
   "option.opensoundboard.keybindMode.pause_resume": "Pause/Resume",
   "option.opensoundboard.keybindMode.play_restart": "Restart",
@@ -60,8 +62,21 @@
   "gui.opensoundboard.config": "Config",
   "gui.opensoundboard.youtube": "YouTube",
 
+  "tooltip.opensoundboard.refresh": "Reload the sound list from disk",
+  "tooltip.opensoundboard.folder": "Open the sounds folder in your file explorer",
+  "tooltip.opensoundboard.config": "Open the configuration screen",
+  "tooltip.opensoundboard.youtube": "Download audio from YouTube",
+  "tooltip.opensoundboard.set_start": "Set the starting playback position for this sound",
+  "tooltip.opensoundboard.keybind": "Click to assign a keybind. Press Escape to remove.",
+
   "gui.opensoundboard.play": "Play",
   "gui.opensoundboard.stop": "Stop",
+
+  "gui.opensoundboard.skip_back": "Skip Back",
+  "gui.opensoundboard.pause_resume": "Pause / Resume",
+  "gui.opensoundboard.skip_forward": "Skip Forward",
+  "gui.opensoundboard.loop": "Loop",
+  "gui.opensoundboard.favorite": "Favorite",
 
   "gui.opensoundboard.keybind.prefix": "Bind: ",
   "gui.opensoundboard.keybind.none": "None",
@@ -86,5 +101,7 @@
   "message.opensoundboard.youtube.finished": "Finished.",
   "message.opensoundboard.youtube.failed": "Download failed.",
   "message.opensoundboard.youtube.timeout": "Download timed out.",
-  "message.opensoundboard.youtube.exit_code": "yt-dlp exited with an error."
+  "message.opensoundboard.youtube.exit_code": "yt-dlp exited with an error.",
+
+  "message.opensoundboard.start_point_set": "Start point set for %s"
 }

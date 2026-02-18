@@ -75,7 +75,8 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                 v -> {
                     SoundboardConfig.data.setPlayWhileMuted(v);
                     SoundboardConfig.save();
-                }
+                },
+                Text.translatable("tooltip.opensoundboard.playWhileMuted")
         ));
 
         panel.child(toggleRow(
@@ -84,7 +85,8 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                 v -> {
                     SoundboardConfig.data.setPlayLocally(v);
                     SoundboardConfig.save();
-                }
+                },
+                Text.translatable("tooltip.opensoundboard.playLocally")
         ));
 
         panel.child(toggleRow(
@@ -93,7 +95,8 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                 v -> {
                     SoundboardConfig.data.setSyncAudio(v);
                     SoundboardConfig.save();
-                }
+                },
+                Text.translatable("tooltip.opensoundboard.syncAudio")
         ));
 
         // sync global volume toggle
@@ -107,7 +110,8 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                     }
                     SoundboardConfig.save();
                     rebuildGlobalVolumeSection();
-                }
+                },
+                Text.translatable("tooltip.opensoundboard.syncGlobalVolume")
         ));
 
         globalVolumeSection = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content()).gap(4);
@@ -120,7 +124,8 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                 v -> {
                     SoundboardConfig.data.setSingleSongAtATime(v);
                     SoundboardConfig.save();
-                }
+                },
+                Text.translatable("tooltip.opensoundboard.singleSongAtATime")
         ));
 
         panel.child(toggleRow(
@@ -130,12 +135,14 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                     SoundboardConfig.data.setLoopAll(v);
                     SoundboardConfig.save();
                     SoundboardAudioSystem.setGlobalLooping(v);
-                }
+                },
+                Text.translatable("tooltip.opensoundboard.loopAll")
         ));
 
         panel.child(cycleRow(
                 Text.translatable("option.opensoundboard.skipAmount"),
-                SoundboardConfig.data.getSkipAmountSeconds()
+                SoundboardConfig.data.getSkipAmountSeconds(),
+                Text.translatable("tooltip.opensoundboard.skipAmount")
         ));
 
         panel.child(keybindModeRow());
@@ -172,7 +179,7 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                 SoundboardConfig.save();
             });
 
-            globalVolumeSection.child(sliderRow(Text.translatable("option.opensoundboard.globalVolume"), slider));
+            globalVolumeSection.child(sliderRow(Text.translatable("option.opensoundboard.globalVolume"), slider, Text.translatable("tooltip.opensoundboard.globalVolume")));
         } else {
             var localSlider = UIComponents.slider(Sizing.fill(100));
             localSlider.value(SoundboardConfig.data.getGlobalLocalVolume());
@@ -190,14 +197,16 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
                 SoundboardConfig.save();
             });
 
-            globalVolumeSection.child(sliderRow(Text.translatable("option.opensoundboard.globalLocalVolume"), localSlider));
-            globalVolumeSection.child(sliderRow(Text.translatable("option.opensoundboard.globalPlayerVolume"), playerSlider));
+            globalVolumeSection.child(sliderRow(Text.translatable("option.opensoundboard.globalLocalVolume"), localSlider, Text.translatable("tooltip.opensoundboard.globalLocalVolume")));
+            globalVolumeSection.child(sliderRow(Text.translatable("option.opensoundboard.globalPlayerVolume"), playerSlider, Text.translatable("tooltip.opensoundboard.globalPlayerVolume")));
         }
     }
 
-    private FlowLayout sliderRow(Text label, SliderComponent slider) {
+    private FlowLayout sliderRow(Text label, SliderComponent slider, Text tooltip) {
         var wrap = UIContainers.verticalFlow(Sizing.fill(100), Sizing.content()).gap(2);
-        wrap.child(UIComponents.label(Text.literal(label.getString()).formatted(Formatting.GRAY)));
+        var lbl = UIComponents.label(Text.literal(label.getString()).formatted(Formatting.GRAY));
+        lbl.tooltip(tooltip);
+        wrap.child(lbl);
         wrap.child(slider);
         return wrap;
     }
@@ -221,7 +230,7 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
         void accept(boolean v);
     }
 
-    private FlowLayout cycleRow(Text label, int initialValue) {
+    private FlowLayout cycleRow(Text label, int initialValue, Text tooltip) {
         var row = (FlowLayout) UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content())
                 .gap(6)
                 .verticalAlignment(VerticalAlignment.CENTER);
@@ -242,8 +251,11 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
         });
         btn.sizing(Sizing.fixed(60), Sizing.content());
 
+        var lbl = UIComponents.label(label);
+        lbl.tooltip(tooltip);
+
         row.child(btn);
-        row.child(UIComponents.label(label));
+        row.child(lbl);
 
         return row;
     }
@@ -269,8 +281,11 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
         });
         btn.sizing(Sizing.fixed(90), Sizing.content());
 
+        var lbl = UIComponents.label(Text.translatable("option.opensoundboard.keybindMode"));
+        lbl.tooltip(Text.translatable("tooltip.opensoundboard.keybindMode"));
+
         row.child(btn);
-        row.child(UIComponents.label(Text.translatable("option.opensoundboard.keybindMode")));
+        row.child(lbl);
 
         return row;
     }
@@ -283,7 +298,7 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
         return Text.literal(seconds + "s").formatted(Formatting.AQUA);
     }
 
-    private FlowLayout toggleRow(Text label, boolean initial, BoolConsumer onChange) {
+    private FlowLayout toggleRow(Text label, boolean initial, BoolConsumer onChange, Text tooltip) {
         var row = (FlowLayout) UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content())
                 .gap(6)
                 .verticalAlignment(VerticalAlignment.CENTER);
@@ -295,8 +310,11 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
         });
         toggle.sizing(Sizing.fixed(60), Sizing.content());
 
+        var lbl = UIComponents.label(label);
+        lbl.tooltip(tooltip);
+
         row.child(toggle);
-        row.child(UIComponents.label(label));
+        row.child(lbl);
 
         return row;
     }

@@ -106,25 +106,25 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         var topButtons = UIContainers.horizontalFlow(Sizing.fixed(listWidth), Sizing.content());
         topButtons.gap(BUTTON_SPACING).margins(Insets.bottom(10));
 
-        topButtons.child(UIComponents.button(
-                Text.translatable("gui.opensoundboard.refresh"),
-                b -> scanSounds()
-        ).sizing(Sizing.fixed(buttonW), Sizing.content()));
+        var refreshBtn = UIComponents.button(Text.translatable("gui.opensoundboard.refresh"), b -> scanSounds());
+        refreshBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
+        refreshBtn.tooltip(Text.translatable("tooltip.opensoundboard.refresh"));
+        topButtons.child(refreshBtn);
 
-        topButtons.child(UIComponents.button(
-                Text.translatable("gui.opensoundboard.folder"),
-                b -> Util.getOperatingSystem().open(OpenSoundboardClient.soundDir)
-        ).sizing(Sizing.fixed(buttonW), Sizing.content()));
+        var folderBtn = UIComponents.button(Text.translatable("gui.opensoundboard.folder"), b -> Util.getOperatingSystem().open(OpenSoundboardClient.soundDir));
+        folderBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
+        folderBtn.tooltip(Text.translatable("tooltip.opensoundboard.folder"));
+        topButtons.child(folderBtn);
 
-        topButtons.child(UIComponents.button(
-                Text.translatable("gui.opensoundboard.config"),
-                b -> client.setScreen(new SoundboardConfigScreen(this))
-        ).sizing(Sizing.fixed(buttonW), Sizing.content()));
+        var configBtn = UIComponents.button(Text.translatable("gui.opensoundboard.config"), b -> client.setScreen(new SoundboardConfigScreen(this)));
+        configBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
+        configBtn.tooltip(Text.translatable("tooltip.opensoundboard.config"));
+        topButtons.child(configBtn);
 
-        topButtons.child(UIComponents.button(
-                Text.translatable("gui.opensoundboard.youtube"),
-                b -> client.setScreen(new YouTubeScreen(this))
-        ).sizing(Sizing.fixed(buttonW), Sizing.content()));
+        var youtubeBtn = UIComponents.button(Text.translatable("gui.opensoundboard.youtube"), b -> client.setScreen(new YouTubeScreen(this)));
+        youtubeBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
+        youtubeBtn.tooltip(Text.translatable("tooltip.opensoundboard.youtube"));
+        topButtons.child(youtubeBtn);
 
         rootComponent.child(topButtons);
 
@@ -199,6 +199,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
                 b.setMessage(Text.translatable("gui.opensoundboard.keybind.listening").formatted(Formatting.YELLOW));
             }
         }).sizing(Sizing.fixed(colW), Sizing.content());
+        detailBindBtn.tooltip(Text.translatable("tooltip.opensoundboard.keybind"));
 
         row.child(detailLocalSlider);
 
@@ -290,12 +291,14 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             if (selectedFile != null)
                 SoundboardAudioSystem.stopAll();
         });
+        stopButton.tooltip(Text.translatable("gui.opensoundboard.stop_all"));
         stopButton.sizing(Sizing.fixed(30), Sizing.content());
 
         backBtn = UIComponents.button(Text.literal("⏪"), b -> {
             if (selectedFile != null)
                 SoundboardAudioSystem.skip(selectedFile.getName(), -SoundboardConfig.data.getSkipAmountSeconds());
         });
+        backBtn.tooltip(Text.translatable("gui.opensoundboard.skip_back"));
         backBtn.sizing(Sizing.fixed(30), Sizing.content());
 
         pauseBtn = UIComponents.button(Text.literal("⏸"), b -> {
@@ -304,12 +307,14 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
                 SoundboardAudioSystem.resume(selectedFile.getName());
             else SoundboardAudioSystem.pause(selectedFile.getName());
         });
+        pauseBtn.tooltip(Text.translatable("gui.opensoundboard.pause_resume"));
         pauseBtn.sizing(Sizing.fixed(30), Sizing.content());
 
         forwardBtn = UIComponents.button(Text.literal("⏩"), b -> {
             if (selectedFile != null)
                 SoundboardAudioSystem.skip(selectedFile.getName(), SoundboardConfig.data.getSkipAmountSeconds());
         });
+        forwardBtn.tooltip(Text.translatable("gui.opensoundboard.skip_forward"));
         forwardBtn.sizing(Sizing.fixed(30), Sizing.content());
 
         loopBtn = UIComponents.button(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()), b -> {
@@ -318,6 +323,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             SoundboardAudioSystem.setGlobalLooping(SoundboardConfig.data.isLoopAll());
             b.setMessage(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()));
         });
+        loopBtn.tooltip(Text.translatable("gui.opensoundboard.loop"));
         loopBtn.sizing(Sizing.fixed(30), Sizing.content());
 
         setStartBtn = UIComponents.button(Text.translatable("gui.opensoundboard.set_start"), b -> {
@@ -330,6 +336,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             }
         }).active(selectedFile == null);
         setStartBtn.sizing(Sizing.fixed(80), Sizing.content());
+        setStartBtn.tooltip(Text.translatable("tooltip.opensoundboard.set_start"));
 
         leftControls.child(timeField);
         centerControls.child(stopButton);
@@ -434,6 +441,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             SoundboardConfig.save();
             scanSounds();
         });
+        favBtn.tooltip(Text.translatable("gui.opensoundboard.favorite"));
         favBtn.sizing(Sizing.fixed(FAV_WIDTH), Sizing.content());
 
         var nameLabel = UIComponents.label(Text.empty());
