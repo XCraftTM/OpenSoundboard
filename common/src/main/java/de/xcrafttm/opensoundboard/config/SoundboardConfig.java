@@ -44,6 +44,9 @@ public class SoundboardConfig {
     boolean syncAudio = false;
     int skipAmountSeconds = 5;
     String keybindMode = "play_stop";
+    int wheelSoundsPerPage = 8;
+    boolean wheelFavoritesOnly = false;
+    boolean wheelCustomLayout = false;
 
     private static void ensureConfigDir() {
         if (!BASE_DIR.exists()) {
@@ -101,6 +104,9 @@ public class SoundboardConfig {
 
         // never keep the embedded map around anymore
         data.sounds = null;
+
+        // load wheel layout config
+        WheelLayoutConfig.load();
     }
 
     /**

@@ -103,5 +103,24 @@
   "message.opensoundboard.youtube.timeout": "Download timed out.",
   "message.opensoundboard.youtube.exit_code": "yt-dlp exited with an error.",
 
-  "message.opensoundboard.start_point_set": "Start point set for %s"
+  "message.opensoundboard.start_point_set": "Start point set for %s",
+
+  "key.opensoundboard.wheel": "Sound Wheel",
+
+  "option.opensoundboard.wheel.header": "Sound Wheel",
+  "option.opensoundboard.wheelSoundsPerPage": "Sounds Per Page",
+  "tooltip.opensoundboard.wheelSoundsPerPage": "How many sounds to show per page in the sound wheel.",
+  "option.opensoundboard.wheelFavoritesOnly": "Favorites Only",
+  "tooltip.opensoundboard.wheelFavoritesOnly": "Only show favorited sounds in the sound wheel.",
+  "option.opensoundboard.wheelCustomLayout": "Custom Layout",
+  "tooltip.opensoundboard.wheelCustomLayout": "Assign specific sounds to each slot in the wheel instead of auto-filling.",
+  "gui.opensoundboard.wheel.editor.open": "Edit Wheel Layout",
+  "gui.opensoundboard.wheel.editor.title": "Wheel Layout Editor",
+  "gui.opensoundboard.wheel.editor.hint": "Click a slot",
+  "gui.opensoundboard.wheel.editor.empty_slot": "[ Empty ]",
+  "gui.opensoundboard.wheel.picker.title": "Pick a Sound",
+  "gui.opensoundboard.wheel.picker.clear": "Clear",
+  "gui.opensoundboard.wheel.picker.preview": "Preview this sound (first 1/3, up to 15s)",
+  "gui.opensoundboard.wheel.page": "Page %s / %s",
+  "gui.opensoundboard.wheel.empty": "No sounds found"
 }

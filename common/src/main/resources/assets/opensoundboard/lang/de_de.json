@@ -103,5 +103,15 @@
   "message.opensoundboard.youtube.timeout": "Download-Zeitüberschreitung.",
   "message.opensoundboard.youtube.exit_code": "yt-dlp wurde mit einem Fehler beendet.",
 
-  "message.opensoundboard.start_point_set": "Startpunkt gesetzt für %s"
+  "message.opensoundboard.start_point_set": "Startpunkt gesetzt für %s",
+
+  "key.opensoundboard.wheel": "Sound-Rad",
+
+  "option.opensoundboard.wheel.header": "Sound-Rad",
+  "option.opensoundboard.wheelSoundsPerPage": "Sounds pro Seite",
+  "tooltip.opensoundboard.wheelSoundsPerPage": "Wie viele Sounds pro Seite im Sound-Rad angezeigt werden.",
+  "option.opensoundboard.wheelFavoritesOnly": "Nur Favoriten",
+  "tooltip.opensoundboard.wheelFavoritesOnly": "Nur favorisierte Sounds im Sound-Rad anzeigen.",
+  "gui.opensoundboard.wheel.page": "Seite %s / %s",
+  "gui.opensoundboard.wheel.empty": "Keine Sounds gefunden"
 }

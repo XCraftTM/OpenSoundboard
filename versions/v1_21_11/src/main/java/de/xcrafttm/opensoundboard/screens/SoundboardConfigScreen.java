@@ -1,10 +1,12 @@
 package de.xcrafttm.opensoundboard.screens;
 
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
+import de.xcrafttm.opensoundboard.screens.WheelLayoutEditorScreen;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.SliderComponent;
 import io.wispforest.owo.ui.component.UIComponents;
+import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.core.*;
@@ -22,6 +24,7 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
 
     private static final int[] SKIP_OPTIONS = {1, 3, 5, 10, 15, 30};
     private static final String[] KEYBIND_MODES = {"play_stop", "pause_resume", "play_restart"};
+    private static final int[] WHEEL_PAGE_OPTIONS = {6, 8, 12, 16};
 
     private final Screen parent;
 
@@ -147,7 +150,46 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
 
         panel.child(keybindModeRow());
 
-        root.child(panel);
+        // --- Wheel Overlay section ---
+        panel.child(UIComponents.label(Text.translatable("option.opensoundboard.wheel.header").formatted(Formatting.GOLD))
+                .margins(Insets.top(6)));
+
+        panel.child(wheelPageSizeRow());
+
+        panel.child(toggleRow(
+                Text.translatable("option.opensoundboard.wheelFavoritesOnly"),
+                SoundboardConfig.data.isWheelFavoritesOnly(),
+                v -> {
+                    SoundboardConfig.data.setWheelFavoritesOnly(v);
+                    SoundboardConfig.save();
+                },
+                Text.translatable("tooltip.opensoundboard.wheelFavoritesOnly")
+        ));
+
+        var editLayoutBtn = UIComponents.button(
+                Text.translatable("gui.opensoundboard.wheel.editor.open"),
+                b -> { if (client != null) client.setScreen(new WheelLayoutEditorScreen(this)); });
+        editLayoutBtn.sizing(Sizing.fixed(columnWidth), Sizing.content());
+        editLayoutBtn.active(SoundboardConfig.data.isWheelCustomLayout());
+
+        panel.child(toggleRow(
+                Text.translatable("option.opensoundboard.wheelCustomLayout"),
+                SoundboardConfig.data.isWheelCustomLayout(),
+                v -> {
+                    SoundboardConfig.data.setWheelCustomLayout(v);
+                    SoundboardConfig.save();
+                    editLayoutBtn.active(v);
+                },
+                Text.translatable("tooltip.opensoundboard.wheelCustomLayout")
+        ));
+
+        var editLayoutRow = (FlowLayout) UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content())
+                .gap(6).verticalAlignment(VerticalAlignment.CENTER);
+        editLayoutRow.child(editLayoutBtn);
+        panel.child(editLayoutRow);
+
+        var scroll = UIContainers.verticalScroll(Sizing.fixed(columnWidth), Sizing.expand(), panel);
+        root.child(scroll);
 
         var buttons = (FlowLayout) UIContainers.horizontalFlow(Sizing.fixed(columnWidth), Sizing.content())
                 .gap(6)
@@ -316,6 +358,35 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
         row.child(toggle);
         row.child(lbl);
 
+        return row;
+    }
+
+    private FlowLayout wheelPageSizeRow() {
+        var row = (FlowLayout) UIContainers.horizontalFlow(Sizing.fill(100), Sizing.content())
+                .gap(6)
+                .verticalAlignment(VerticalAlignment.CENTER);
+
+        var btn = UIComponents.button(Text.literal(SoundboardConfig.data.getWheelSoundsPerPage() + "").formatted(Formatting.AQUA), b -> {
+            int current = SoundboardConfig.data.getWheelSoundsPerPage();
+            int nextIndex = 0;
+            for (int i = 0; i < WHEEL_PAGE_OPTIONS.length; i++) {
+                if (WHEEL_PAGE_OPTIONS[i] == current) {
+                    nextIndex = (i + 1) % WHEEL_PAGE_OPTIONS.length;
+                    break;
+                }
+            }
+            int next = WHEEL_PAGE_OPTIONS[nextIndex];
+            SoundboardConfig.data.setWheelSoundsPerPage(next);
+            SoundboardConfig.save();
+            b.setMessage(Text.literal(next + "").formatted(Formatting.AQUA));
+        });
+        btn.sizing(Sizing.fixed(60), Sizing.content());
+
+        var lbl = UIComponents.label(Text.translatable("option.opensoundboard.wheelSoundsPerPage"));
+        lbl.tooltip(Text.translatable("tooltip.opensoundboard.wheelSoundsPerPage"));
+
+        row.child(btn);
+        row.child(lbl);
         return row;
     }
 
