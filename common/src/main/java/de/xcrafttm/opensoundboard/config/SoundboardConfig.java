@@ -34,12 +34,12 @@ public class SoundboardConfig {
     // Stores per-sound settings separately
     private static SoundStore soundStore = new SoundStore();
 
-    boolean playWhileMuted = false;
+    boolean playWhileMuted = true;
     boolean playLocally = true;
-    float globalLocalVolume = 1.0f;
-    float globalPlayerVolume = 1.0f;
+    float globalLocalVolume = 0.2f;
+    float globalPlayerVolume = 0.2f;
     boolean syncGlobalVolume = false;
-    boolean singleSongAtATime = false;
+    boolean singleSongAtATime = true;
     boolean loopAll = false;
     boolean syncAudio = false;
     int skipAmountSeconds = 5;
@@ -47,6 +47,10 @@ public class SoundboardConfig {
     int wheelSoundsPerPage = 8;
     boolean wheelFavoritesOnly = false;
     boolean wheelCustomLayout = false;
+    boolean showSubfolders = true;
+    String sortMode = "name";
+    boolean sortAscending = true;
+    String lastOpenedFolder = null; // relative folder name, null = root
 
     private static void ensureConfigDir() {
         if (!BASE_DIR.exists()) {
@@ -131,6 +135,27 @@ public class SoundboardConfig {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Resolves the stored lastOpenedFolder name to a File.
+     * Returns null if unset or the folder no longer exists (and clears the stored value).
+     */
+    public static java.io.File resolveLastOpenedFolder(java.io.File soundDir) {
+        String name = data.lastOpenedFolder;
+        if (name == null || name.isBlank()) return null;
+        java.io.File folder = new java.io.File(soundDir, name);
+        if (!folder.exists() || !folder.isDirectory()) {
+            data.lastOpenedFolder = null;
+            save();
+            return null;
+        }
+        return folder;
+    }
+
+    public static void saveLastOpenedFolder(java.io.File folder) {
+        data.lastOpenedFolder = (folder != null) ? folder.getName() : null;
+        save();
     }
 
     /**

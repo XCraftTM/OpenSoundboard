@@ -49,6 +49,15 @@
   "option.opensoundboard.keybindMode.pause_resume": "Pause/Resume",
   "option.opensoundboard.keybindMode.play_restart": "Restart",
 
+  "option.opensoundboard.showSubfolders": "Show Subfolders",
+  "tooltip.opensoundboard.showSubfolders": "Groups sounds by subfolder (depth 1). Folders can be collapsed.",
+
+  "gui.opensoundboard.sort.name": "Name",
+  "gui.opensoundboard.sort.date": "Date",
+  "gui.opensoundboard.sort.length": "Length",
+  "tooltip.opensoundboard.sortMode": "Cycle sort mode: Name → Date → Length",
+  "tooltip.opensoundboard.sortDir": "Toggle sort direction (ascending / descending)",
+
   "gui.opensoundboard.title": "Soundboard",
   "text.soundboard.title": "\u00a7f\u00a7lSoundboard",
 

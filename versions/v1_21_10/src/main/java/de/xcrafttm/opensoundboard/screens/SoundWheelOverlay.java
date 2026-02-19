@@ -8,8 +8,8 @@ import de.xcrafttm.opensoundboard.tools.WheelLayout;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.UIComponents;
-import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.component.Components;
+import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.gui.DrawContext;
@@ -67,7 +67,7 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
 
     @Override
     protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+        return OwoUIAdapter.create(this, Containers::verticalFlow);
     }
 
     @Override
@@ -104,7 +104,7 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
                         String.valueOf(page + 1), String.valueOf(totalPages())).getString();
 
         int centerW = 120;
-        ButtonComponent centerBtn = UIComponents.button(Text.literal(pageText), b -> {});
+        ButtonComponent centerBtn = Components.button(Text.literal(pageText), b -> {});
         centerBtn.sizing(Sizing.fixed(centerW), Sizing.fixed(BUTTON_H));
         centerBtn.positioning(Positioning.absolute(cx - centerW / 2, cy - BUTTON_H / 2));
         centerBtn.active(false);
@@ -145,7 +145,7 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
                     if (isPlaying) buttonText.append(Text.literal(" ▶").formatted(Formatting.GREEN));
                 }
 
-                ButtonComponent btn = UIComponents.button(buttonText, b -> {});
+                ButtonComponent btn = Components.button(buttonText, b -> {});
                 btn.sizing(Sizing.fixed(BUTTON_W), Sizing.fixed(BUTTON_H));
                 btn.positioning(Positioning.absolute(pos[0], pos[1]));
 
@@ -173,7 +173,7 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
                 root.child(btn);
                 soundButtons.add(btn);
             } else {
-                ButtonComponent filler = UIComponents.button(Text.empty(), b -> {});
+                ButtonComponent filler = Components.button(Text.empty(), b -> {});
                 filler.sizing(Sizing.fixed(BUTTON_W), Sizing.fixed(BUTTON_H));
                 filler.positioning(Positioning.absolute(pos[0], pos[1]));
                 filler.active(false);

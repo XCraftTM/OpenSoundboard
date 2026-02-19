@@ -150,6 +150,16 @@ public class SoundboardConfigScreen extends BaseOwoScreen<FlowLayout> {
 
         panel.child(keybindModeRow());
 
+        panel.child(toggleRow(
+                Text.translatable("option.opensoundboard.showSubfolders"),
+                SoundboardConfig.data.isShowSubfolders(),
+                v -> {
+                    SoundboardConfig.data.setShowSubfolders(v);
+                    SoundboardConfig.save();
+                },
+                Text.translatable("tooltip.opensoundboard.showSubfolders")
+        ));
+
         // --- Wheel Overlay section ---
         panel.child(UIComponents.label(Text.translatable("option.opensoundboard.wheel.header").formatted(Formatting.GOLD))
                 .margins(Insets.top(6)));

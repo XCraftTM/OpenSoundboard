@@ -2,18 +2,13 @@ package de.xcrafttm.opensoundboard.screens;
 
 import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
-import de.xcrafttm.opensoundboard.integration.ModMenuIntegration;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
-import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.SliderComponent;
-import io.wispforest.owo.ui.component.TextBoxComponent;
-import io.wispforest.owo.ui.component.Components;
+import io.wispforest.owo.ui.component.*;
+import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
-import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -27,22 +22,20 @@ import java.util.stream.Collectors;
 
 public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
-    private static final int BUTTON_SPACING = 5;
+    private static final int BUTTON_SPACING    = 5;
     private static final long DOUBLE_CLICK_WINDOW_MS = 250;
+    private static final int FAV_WIDTH  = 20;
+    private static final int PLAY_WIDTH = 35;
 
     private TextBoxComponent queryField;
-
     private FlowLayout resultsList;
     private ScrollContainer<FlowLayout> scrollContainer;
-
     private LabelComponent detailLabel;
     private SliderComponent detailLocalSlider;
     private SliderComponent detailPlayerSlider;
     private ButtonComponent detailBindBtn;
-
     private SliderComponent timelineSlider;
     private TextBoxComponent timeField;
-
     private ButtonComponent stopButton;
     private ButtonComponent backBtn;
     private ButtonComponent pauseBtn;
@@ -52,24 +45,17 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
     private File selectedFile = null;
     private boolean isBinding = false;
-    /**
-     * while binding: last pressed key candidate; we commit it when all keys are released
-     */
     private SoundboardConfig.KeyBind pendingKeybind = null;
-
     private List<File> results = List.of();
-
-    // double click tracking for rows
     private File lastClickedFile = null;
     private long lastClickMs = 0;
-
-    // deferred scroll target – layout isn't ready during build()
     private String pendingScrollTarget = null;
-
-    private static final int FAV_WIDTH = 20;
-    private static final int PLAY_WIDTH = 35;
-
+    private static File currentFolder = null;
+    private double savedScrollPos = 0.0;
     private int listWidth;
+
+    private record RowWidgets(ButtonComponent favBtn, LabelComponent nameLabel, ButtonComponent playBtn) {}
+    private final Map<String, RowWidgets> rowWidgets = new HashMap<>();
 
     @Override
     protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
@@ -77,246 +63,180 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
-    protected void build(FlowLayout rootComponent) {
-        // Compute width based on actual screen size
-        // Keep a nice centered column like the reference image
-        this.listWidth = Math.min(400, Math.max(320, (int) (this.width * 0.55f)));
+    protected void build(FlowLayout root) {
+        if (currentFolder == null)
+            currentFolder = SoundboardConfig.resolveLastOpenedFolder(OpenSoundboardClient.soundDir);
 
-        rootComponent
-                .surface(Surface.VANILLA_TRANSLUCENT)
+        listWidth = Math.min(400, Math.max(320, (int) (this.width * 0.55f)));
+
+        root.surface(Surface.VANILLA_TRANSLUCENT)
                 .horizontalAlignment(HorizontalAlignment.CENTER)
                 .verticalAlignment(VerticalAlignment.TOP)
                 .padding(Insets.of(10));
 
-        // ----- Header -----
-        rootComponent.child(
-                Components.label(Text.translatable("gui.opensoundboard.title").formatted(Formatting.BOLD))
-                        .horizontalTextAlignment(HorizontalAlignment.CENTER)
-                        .margins(Insets.bottom(5))
-        );
+        root.child(Components.label(Text.translatable("gui.opensoundboard.title").formatted(Formatting.BOLD))
+                .horizontalTextAlignment(HorizontalAlignment.CENTER)
+                .margins(Insets.bottom(5)));
 
         queryField = Components.textBox(Sizing.fixed(listWidth));
         queryField.setPlaceholder(Text.translatable("gui.opensoundboard.search_hint"));
         queryField.onChanged().subscribe(s -> scanSounds());
-        rootComponent.child(queryField.margins(Insets.bottom(5)));
+        root.child(queryField.margins(Insets.bottom(5)));
 
-        int gaps = BUTTON_SPACING * 3;
-        int buttonW = Math.max(20, (listWidth - gaps) / 4);
+        int buttonW = Math.max(20, (listWidth - BUTTON_SPACING * 5) / 6);
+        var topButtons = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(listWidth), Sizing.content())
+                .gap(BUTTON_SPACING).margins(Insets.bottom(10));
 
-        var topButtons = Containers.horizontalFlow(Sizing.fixed(listWidth), Sizing.content());
-        topButtons.gap(BUTTON_SPACING).margins(Insets.bottom(10));
+        topButtons.child(buildToolbarButton("gui.opensoundboard.refresh",  "tooltip.opensoundboard.refresh",  buttonW, b -> scanSounds()));
+        topButtons.child(buildToolbarButton("gui.opensoundboard.folder",   "tooltip.opensoundboard.folder",   buttonW, b -> Util.getOperatingSystem().open(OpenSoundboardClient.soundDir)));
+        topButtons.child(buildToolbarButton("gui.opensoundboard.config",   "tooltip.opensoundboard.config",   buttonW, b -> client.setScreen(new SoundboardConfigScreen(this))));
+        topButtons.child(buildToolbarButton("gui.opensoundboard.youtube",  "tooltip.opensoundboard.youtube",  buttonW, b -> client.setScreen(new YouTubeScreen(this))));
 
-        var refreshBtn = Components.button(Text.translatable("gui.opensoundboard.refresh"), b -> scanSounds());
-        refreshBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
-        refreshBtn.tooltip(Text.translatable("tooltip.opensoundboard.refresh"));
-        topButtons.child(refreshBtn);
+        var sortModeBtn = Components.button(sortModeLabel(), b -> {
+            String[] modes = {"name", "date", "length"};
+            String cur = SoundboardConfig.data.getSortMode();
+            int next = 0;
+            for (int i = 0; i < modes.length; i++) if (modes[i].equals(cur)) { next = (i + 1) % modes.length; break; }
+            SoundboardConfig.data.setSortMode(modes[next]);
+            SoundboardConfig.save();
+            b.setMessage(sortModeLabel());
+            scanSounds();
+        });
+        sortModeBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
+        sortModeBtn.tooltip(Text.translatable("tooltip.opensoundboard.sortMode"));
+        topButtons.child(sortModeBtn);
 
-        var folderBtn = Components.button(Text.translatable("gui.opensoundboard.folder"), b -> Util.getOperatingSystem().open(OpenSoundboardClient.soundDir));
-        folderBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
-        folderBtn.tooltip(Text.translatable("tooltip.opensoundboard.folder"));
-        topButtons.child(folderBtn);
+        var sortDirBtn = Components.button(sortDirLabel(), b -> {
+            SoundboardConfig.data.setSortAscending(!SoundboardConfig.data.isSortAscending());
+            SoundboardConfig.save();
+            b.setMessage(sortDirLabel());
+            scanSounds();
+        });
+        sortDirBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
+        sortDirBtn.tooltip(Text.translatable("tooltip.opensoundboard.sortDir"));
+        topButtons.child(sortDirBtn);
 
-        var configBtn = Components.button(Text.translatable("gui.opensoundboard.config"), b -> client.setScreen(new SoundboardConfigScreen(this)));
-        configBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
-        configBtn.tooltip(Text.translatable("tooltip.opensoundboard.config"));
-        topButtons.child(configBtn);
+        root.child(topButtons);
 
-        var youtubeBtn = Components.button(Text.translatable("gui.opensoundboard.youtube"), b -> client.setScreen(new YouTubeScreen(this)));
-        youtubeBtn.sizing(Sizing.fixed(buttonW), Sizing.content());
-        youtubeBtn.tooltip(Text.translatable("tooltip.opensoundboard.youtube"));
-        topButtons.child(youtubeBtn);
-
-        rootComponent.child(topButtons);
-
-
-        // ----- Results -----
         resultsList = Containers.verticalFlow(Sizing.fixed(listWidth), Sizing.content()).gap(2);
         scrollContainer = Containers.verticalScroll(Sizing.fixed(listWidth), Sizing.expand(), resultsList);
-        // darker translucent list background
         scrollContainer.surface(Surface.flat(0x66000000)).padding(Insets.of(5));
-        rootComponent.child(scrollContainer);
+        root.child(scrollContainer);
 
-        // ----- Details -----
-        // Details pane has padding -> children should fill and not assume full listWidth
-        var detailsPane = Containers.verticalFlow(Sizing.fixed(listWidth), Sizing.content());
-        detailsPane.surface(Surface.BLANK).padding(Insets.of(5));
+        buildDetailsPane(root);
 
-        // Usable inner width inside detailsPane after padding (5 left + 5 right)
-        final int detailsInnerWidth = Math.max(0, listWidth - 10);
+        root.child(Components.button(Text.translatable("gui.done"), b -> close())
+                .sizing(Sizing.fixed(150), Sizing.content())
+                .margins(Insets.top(10)));
+
+        scanSounds();
+
+        String activeName = SoundboardAudioSystem.getActiveSoundName();
+        if (activeName != null) {
+            var file = new File(OpenSoundboardClient.soundDir, activeName);
+            if (file.exists()) { selectSound(file); pendingScrollTarget = activeName; }
+        }
+        refreshDetailsUiState();
+    }
+
+    private void buildDetailsPane(FlowLayout root) {
+        var pane = Containers.verticalFlow(Sizing.fixed(listWidth), Sizing.content());
+        pane.surface(Surface.BLANK).padding(Insets.of(5));
+
+        int innerW = Math.max(0, listWidth - 10);
+        int gap = 5, colW = (innerW - gap * 2) / 3;
 
         detailLabel = Components.label(Text.translatable("gui.opensoundboard.select_hint").formatted(Formatting.GRAY));
         detailLabel.horizontalSizing(Sizing.fill(100));
-        detailsPane.child(detailLabel.horizontalTextAlignment(HorizontalAlignment.CENTER).margins(Insets.bottom(5)));
+        pane.child(detailLabel.horizontalTextAlignment(HorizontalAlignment.CENTER).margins(Insets.bottom(5)));
 
-        int gap = 5;
-        int inner = detailsInnerWidth;
-        int colW = (inner - gap * 2) / 3;
+        var sliderRow = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(innerW), Sizing.content())
+                .gap(gap).verticalAlignment(VerticalAlignment.CENTER);
 
-        var row = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(inner), Sizing.content())
-                .gap(gap)
-                .verticalAlignment(VerticalAlignment.CENTER);
-
-        detailLocalSlider = Components.slider(Sizing.fixed(colW));
+        detailLocalSlider  = Components.slider(Sizing.fixed(colW));
         detailPlayerSlider = Components.slider(Sizing.fixed(colW));
 
-        // slider labels + volume update handlers
         detailLocalSlider.message(v -> {
-            int pct;
-            try {
-                pct = (int) Math.round(Double.parseDouble(v) * 100d);
-            } catch (Exception ignored) {
-                pct = 0;
-            }
-            pct = Math.max(0, Math.min(100, pct));
-            if (SoundboardConfig.data.isSyncAudio()) {
-                return Text.translatable("gui.opensoundboard.sync_volume", String.valueOf(pct));
-            }
-            return Text.translatable("gui.opensoundboard.local_volume", String.valueOf(pct));
+            int pct = pctFromSlider(v);
+            return SoundboardConfig.data.isSyncAudio()
+                    ? Text.translatable("gui.opensoundboard.sync_volume",  String.valueOf(pct))
+                    : Text.translatable("gui.opensoundboard.local_volume", String.valueOf(pct));
         });
-        detailLocalSlider.onChanged().subscribe(value -> {
-            if (SoundboardConfig.data.isSyncAudio()) {
-                updateSelectedVolume(value, value);
-            } else {
-                updateSelectedVolume(value, null);
-            }
-        });
-
-        detailPlayerSlider.message(v -> {
-            int pct;
-            try {
-                pct = (int) Math.round(Double.parseDouble(v) * 100d);
-            } catch (Exception ignored) {
-                pct = 0;
-            }
-            pct = Math.max(0, Math.min(100, pct));
-            return Text.translatable("gui.opensoundboard.player_volume", String.valueOf(pct));
-        });
+        detailLocalSlider.onChanged().subscribe(value ->
+                updateSelectedVolume(value, SoundboardConfig.data.isSyncAudio() ? value : null));
+        detailPlayerSlider.message(v ->
+                Text.translatable("gui.opensoundboard.player_volume", String.valueOf(pctFromSlider(v))));
         detailPlayerSlider.onChanged().subscribe(value -> updateSelectedVolume(null, value));
 
-        detailBindBtn = (ButtonComponent) Components.button(Text.translatable("gui.opensoundboard.keybind.none"), b -> {
-            if (selectedFile != null) {
-                isBinding = true;
-                b.setMessage(Text.translatable("gui.opensoundboard.keybind.listening").formatted(Formatting.YELLOW));
-            }
-        }).sizing(Sizing.fixed(colW), Sizing.content());
+        detailBindBtn = (ButtonComponent) Components.button(
+                Text.translatable("gui.opensoundboard.keybind.none"), b -> {
+                    if (selectedFile != null) {
+                        isBinding = true;
+                        b.setMessage(Text.translatable("gui.opensoundboard.keybind.listening").formatted(Formatting.YELLOW));
+                    }
+                }).sizing(Sizing.fixed(colW), Sizing.content());
         detailBindBtn.tooltip(Text.translatable("tooltip.opensoundboard.keybind"));
 
-        row.child(detailLocalSlider);
-
+        sliderRow.child(detailLocalSlider);
         if (SoundboardConfig.data.isSyncAudio()) {
-            // In sync mode, the local slider represents both volumes and should span the available space
-            // (two columns), while keeping the keybind button on the right.
             detailLocalSlider.horizontalSizing(Sizing.fixed(colW * 2 + gap));
-            row.child(Containers.horizontalFlow(Sizing.fixed(0), Sizing.content()));
+            sliderRow.child(Containers.horizontalFlow(Sizing.fixed(0), Sizing.content()));
         } else {
-            row.child(detailPlayerSlider);
+            sliderRow.child(detailPlayerSlider);
         }
+        sliderRow.child(detailBindBtn);
+        pane.child(sliderRow.margins(Insets.top(2)));
 
-        row.child(detailBindBtn);
-
-        detailsPane.child(row.margins(Insets.top(2)));
-
-        // Timeline slider
         timelineSlider = Components.slider(Sizing.fill()).message(v -> {
             var file = selectedFile;
             if (file == null) return Text.literal("0:00.0 / 0:00.0");
-
             String key = file.getName();
             long durationMs = SoundboardAudioSystem.getDurationMillis(key);
-            long passedMs = SoundboardAudioSystem.getTimeMillis(key);
-
+            long passedMs   = SoundboardAudioSystem.getTimeMillis(key);
             if (durationMs > 0) {
-                // If not currently playing, estimate passed from slider position for a stable tooltip
                 if (!SoundboardAudioSystem.isPlaying(key)) {
-                    float progress;
-                    try {
-                        progress = Float.parseFloat(v);
-                    } catch (Exception ignored) {
-                        progress = 0f;
-                    }
-                    progress = Math.max(0f, Math.min(1f, progress));
-                    passedMs = Math.max(0, Math.min(durationMs, Math.round(progress * durationMs)));
+                    float p = 0;
+                    try { p = Float.parseFloat(v); } catch (Exception ignored) {}
+                    p = Math.max(0f, Math.min(1f, p));
+                    passedMs = Math.max(0, Math.min(durationMs, Math.round(p * durationMs)));
                 } else {
                     passedMs = Math.max(0, Math.min(durationMs, passedMs));
                 }
-                long leftMs = Math.max(0, durationMs - passedMs);
-                return Text.literal(GuiTools.formatTimeMillis(passedMs) + " / -" + GuiTools.formatTimeMillis(leftMs));
+                return Text.literal(GuiTools.formatTimeMillis(passedMs) + " / -" + GuiTools.formatTimeMillis(Math.max(0, durationMs - passedMs)));
             }
-
-            // unknown duration
             return Text.literal(GuiTools.formatTimeMillis(Math.max(0, passedMs)) + " / -0:00.0");
         });
         timelineSlider.onChanged().subscribe(value -> {
             var file = selectedFile;
-            if (file != null && SoundboardAudioSystem.isPlaying(file.getName())) {
+            if (file != null && SoundboardAudioSystem.isPlaying(file.getName()))
                 SoundboardAudioSystem.setCursor(file.getName(), (float) value);
-            }
         });
-        detailsPane.child(timelineSlider.margins(Insets.top(5)));
-
+        pane.child(timelineSlider.margins(Insets.top(5)));
 
         var controlsRow = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.content())
                 .verticalAlignment(VerticalAlignment.CENTER);
-
-        // fixed side columns (~80px) + centered middle column
-        var leftControls = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(80), Sizing.content())
-                .horizontalAlignment(HorizontalAlignment.LEFT);
-
-
-        var centerControls = (FlowLayout) Containers.horizontalFlow(Sizing.expand(), Sizing.content())
-                .gap(5)
-                .horizontalAlignment(HorizontalAlignment.CENTER);
-
-        var rightControls = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(80), Sizing.content())
-                .horizontalAlignment(HorizontalAlignment.RIGHT);
+        var leftCtrl   = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(80), Sizing.content()).horizontalAlignment(HorizontalAlignment.LEFT);
+        var centerCtrl = (FlowLayout) Containers.horizontalFlow(Sizing.expand(), Sizing.content()).gap(5).horizontalAlignment(HorizontalAlignment.CENTER);
+        var rightCtrl  = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(80), Sizing.content()).horizontalAlignment(HorizontalAlignment.RIGHT);
 
         timeField = Components.textBox(Sizing.fill());
         timeField.onChanged().subscribe(text -> {
-            if (!timeField.isFocused()) return;
-            var file = selectedFile;
-            if (file == null) return;
-            if (!SoundboardAudioSystem.isPlaying(file.getName())) return;
-
-            long millis = GuiTools.parseTimeMillis(text);
-            if (millis < 0) return;
-
-            long duration = SoundboardAudioSystem.getDurationMillis(file.getName());
-            if (duration <= 0) return;
-
-            float progress = Math.max(0f, Math.min(1f, millis / (float) duration));
-            SoundboardAudioSystem.setCursor(file.getName(), progress);
+            if (!timeField.isFocused() || selectedFile == null) return;
+            if (!SoundboardAudioSystem.isPlaying(selectedFile.getName())) return;
+            long millis   = GuiTools.parseTimeMillis(text);
+            long duration = SoundboardAudioSystem.getDurationMillis(selectedFile.getName());
+            if (millis < 0 || duration <= 0) return;
+            SoundboardAudioSystem.setCursor(selectedFile.getName(), Math.max(0f, Math.min(1f, millis / (float) duration)));
         });
 
-        stopButton = Components.button(Text.literal("\u23F9"), b -> {
-            if (selectedFile != null)
-                SoundboardAudioSystem.stopAll();
-        });
-        stopButton.tooltip(Text.translatable("gui.opensoundboard.stop_all"));
-        stopButton.sizing(Sizing.fixed(30), Sizing.content());
-
-        backBtn = Components.button(Text.literal("\u23EA"), b -> {
-            if (selectedFile != null)
-                SoundboardAudioSystem.skip(selectedFile.getName(), -SoundboardConfig.data.getSkipAmountSeconds());
-        });
-        backBtn.tooltip(Text.translatable("gui.opensoundboard.skip_back"));
-        backBtn.sizing(Sizing.fixed(30), Sizing.content());
-
-        pauseBtn = Components.button(Text.literal("\u23F8"), b -> {
+        stopButton = buildControlButton("\u23F9", "gui.opensoundboard.stop_all",     b -> SoundboardAudioSystem.stopAll());
+        backBtn    = buildControlButton("\u23EA", "gui.opensoundboard.skip_back",    b -> { if (selectedFile != null) SoundboardAudioSystem.skip(selectedFile.getName(), -SoundboardConfig.data.getSkipAmountSeconds()); });
+        pauseBtn   = buildControlButton("\u23F8", "gui.opensoundboard.pause_resume", b -> {
             if (selectedFile == null) return;
-            if (SoundboardAudioSystem.isPaused(selectedFile.getName()))
-                SoundboardAudioSystem.resume(selectedFile.getName());
+            if (SoundboardAudioSystem.isPaused(selectedFile.getName())) SoundboardAudioSystem.resume(selectedFile.getName());
             else SoundboardAudioSystem.pause(selectedFile.getName());
         });
-        pauseBtn.tooltip(Text.translatable("gui.opensoundboard.pause_resume"));
-        pauseBtn.sizing(Sizing.fixed(30), Sizing.content());
-
-        forwardBtn = Components.button(Text.literal("\u23E9"), b -> {
-            if (selectedFile != null)
-                SoundboardAudioSystem.skip(selectedFile.getName(), SoundboardConfig.data.getSkipAmountSeconds());
-        });
-        forwardBtn.tooltip(Text.translatable("gui.opensoundboard.skip_forward"));
-        forwardBtn.sizing(Sizing.fixed(30), Sizing.content());
-
+        forwardBtn = buildControlButton("\u23E9", "gui.opensoundboard.skip_forward", b -> { if (selectedFile != null) SoundboardAudioSystem.skip(selectedFile.getName(), SoundboardConfig.data.getSkipAmountSeconds()); });
         loopBtn = Components.button(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()), b -> {
             SoundboardConfig.data.setLoopAll(!SoundboardConfig.data.isLoopAll());
             SoundboardConfig.save();
@@ -331,106 +251,190 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             var data = SoundboardConfig.get(selectedFile.getName());
             data.setStartingPoint(Math.max(0f, SoundboardAudioSystem.getProgress(selectedFile.getName())));
             SoundboardConfig.save();
-            if (client.player != null) {
+            if (client.player != null)
                 client.player.sendMessage(Text.translatable("message.opensoundboard.start_point_set", selectedFile.getName()), true);
-            }
-        }).active(selectedFile == null);
+        });
         setStartBtn.sizing(Sizing.fixed(80), Sizing.content());
         setStartBtn.tooltip(Text.translatable("tooltip.opensoundboard.set_start"));
 
-        leftControls.child(timeField);
-        centerControls.child(stopButton);
-        centerControls.child(backBtn);
-        centerControls.child(pauseBtn);
-        centerControls.child(forwardBtn);
-        centerControls.child(loopBtn);
-        rightControls.child(setStartBtn);
-
-        controlsRow.child(leftControls);
-        controlsRow.child(centerControls);
-        controlsRow.child(rightControls);
-
-        detailsPane.child(controlsRow.margins(Insets.top(5)));
-
-        rootComponent.child(detailsPane);
-
-        rootComponent.child(Components.button(Text.translatable("gui.done"), b -> close())
-                .sizing(Sizing.fixed(150), Sizing.content())
-                .margins(Insets.top(10)));
-
-        scanSounds();
-
-        String activeName = SoundboardAudioSystem.getActiveSoundName();
-        if (activeName != null) {
-            var file = new File(OpenSoundboardClient.soundDir, activeName);
-            if (file.exists()) {
-                selectSound(file);
-                // Defer scroll to first tick() when layout is ready
-                pendingScrollTarget = activeName;
-            }
-        }
-
-        refreshDetailsUiState();
+        leftCtrl.child(timeField);
+        centerCtrl.child(stopButton).child(backBtn).child(pauseBtn).child(forwardBtn).child(loopBtn);
+        rightCtrl.child(setStartBtn);
+        controlsRow.child(leftCtrl).child(centerCtrl).child(rightCtrl);
+        pane.child(controlsRow.margins(Insets.top(5)));
+        root.child(pane);
     }
 
-    private void scrollToSound(String soundFileName) {
-        if (soundFileName == null || scrollContainer == null || resultsList == null) return;
+    private ButtonComponent buildToolbarButton(String labelKey, String tooltipKey, int width, java.util.function.Consumer<ButtonComponent> action) {
+        var btn = Components.button(Text.translatable(labelKey), action);
+        btn.sizing(Sizing.fixed(width), Sizing.content());
+        btn.tooltip(Text.translatable(tooltipKey));
+        return btn;
+    }
 
-        // Find the index of the row matching this sound
-        int index = -1;
+    private ButtonComponent buildControlButton(String symbol, String tooltipKey, java.util.function.Consumer<ButtonComponent> action) {
+        var btn = Components.button(Text.literal(symbol), action);
+        btn.tooltip(Text.translatable(tooltipKey));
+        btn.sizing(Sizing.fixed(30), Sizing.content());
+        return btn;
+    }
+
+    private static int pctFromSlider(String v) {
+        try { return Math.max(0, Math.min(100, (int) Math.round(Double.parseDouble(v) * 100d))); }
+        catch (Exception ignored) { return 0; }
+    }
+
+    private void setPlaybackControlsActive(boolean active) {
+        timelineSlider.active(active);
+        timeField.setEditable(active);
+        pauseBtn.active(active);
+        setStartBtn.active(active);
+        backBtn.active(active);
+        forwardBtn.active(active);
+    }
+
+    private void scrollToSound(String name) {
+        if (name == null || scrollContainer == null || resultsList == null) return;
         var children = resultsList.children();
         for (int i = 0; i < children.size(); i++) {
-            var child = children.get(i);
-            if (child instanceof FlowLayout row) {
-                String id = row.id();
-                if (soundFileName.equals(id)) {
-                    index = i;
-                    break;
-                }
+            if (children.get(i) instanceof FlowLayout row && name.equals(row.id())) {
+                double t = children.size() <= 1 ? 0.0 : (i / (double) (children.size() - 1));
+                scrollContainer.scrollTo(Math.max(0.0, Math.min(1.0, t)));
+                return;
             }
         }
+    }
 
-        if (index < 0) return;
+    private static Text sortModeLabel() {
+        return Text.translatable("gui.opensoundboard.sort." + SoundboardConfig.data.getSortMode()).formatted(Formatting.AQUA);
+    }
 
-        // Best-effort scrolling: center the item in view
-        // Owo's ScrollContainer has scrollTo(double) which expects 0..1
-        double t = children.size() <= 1 ? 0.0 : (index / (double) (children.size() - 1));
-        scrollContainer.scrollTo(Math.max(0.0, Math.min(1.0, t)));
+    private static Text sortDirLabel() {
+        return Text.literal(SoundboardConfig.data.isSortAscending() ? "\u25B2" : "\u25BC").formatted(Formatting.AQUA);
+    }
+
+    private Comparator<File> sortComparator() {
+        Comparator<File> base = switch (SoundboardConfig.data.getSortMode()) {
+            case "date"   -> Comparator.comparingLong(File::lastModified);
+            case "length" -> Comparator.comparingLong(f -> { long d = SoundboardAudioSystem.getDurationMillis(f.getName()); return d > 0 ? d : 0L; });
+            default       -> Comparator.comparing(f -> f.getName().toLowerCase());
+        };
+        if (!SoundboardConfig.data.isSortAscending()) base = base.reversed();
+        return Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite()).reversed().thenComparing(base);
     }
 
     private void scanSounds() {
-        // On each scan, ensure filenames are sanitized and migrate config keys
         sanitizeAndRenameSoundFiles();
-
         String query = queryField.getText().trim().toLowerCase();
-        File[] allFiles = OpenSoundboardClient.soundDir.listFiles((dir, name) -> name.endsWith(".mp3"));
-        if (allFiles == null) allFiles = new File[0];
-
-        results = Arrays.stream(allFiles)
-                .filter(f -> f.getName().toLowerCase().contains(query))
-                .sorted(Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite())
-                        .reversed()
-                        .thenComparing(File::getName))
-                .collect(Collectors.toList());
-
         resultsList.clearChildren();
-        for (File file : results) {
-            resultsList.child(buildRow(file));
-        }
+        results = new ArrayList<>();
+        rowWidgets.clear();
 
-        if (selectedFile != null && results.stream().noneMatch(f -> Objects.equals(f.getName(), selectedFile.getName()))) {
+        if (SoundboardConfig.data.isShowSubfolders()) scanWithSubfolders(query);
+        else scanFlat(query);
+
+        if (selectedFile != null && results.stream().noneMatch(f -> Objects.equals(f.getName(), selectedFile.getName())))
             selectSound(null);
+
+        if (scrollContainer != null) scrollContainer.scrollTo(savedScrollPos);
+        SoundboardAudioSystem.preloadAll();
+    }
+
+    private void scanFlat(String query) {
+        File dir = currentFolder != null ? currentFolder : OpenSoundboardClient.soundDir;
+        if (currentFolder != null) resultsList.child(buildBackRow());
+        File[] files = dir.listFiles((d, n) -> n.endsWith(".mp3"));
+        if (files == null) files = new File[0];
+        appendSorted(files, query);
+    }
+
+    private void scanWithSubfolders(String query) {
+        if (currentFolder != null) {
+            resultsList.child(buildBackRow());
+            File[] files = currentFolder.listFiles((d, n) -> n.endsWith(".mp3"));
+            if (files == null) files = new File[0];
+            appendSorted(files, query);
+        } else {
+            File[] subdirs = OpenSoundboardClient.soundDir.listFiles(File::isDirectory);
+            if (subdirs != null) {
+                Arrays.sort(subdirs, Comparator.comparing(File::getName));
+                for (File sub : subdirs) {
+                    File[] mp3s = sub.listFiles((d, n) -> n.endsWith(".mp3"));
+                    if (mp3s == null || mp3s.length == 0) continue;
+                    boolean anyMatch = query.isEmpty() || sub.getName().toLowerCase().contains(query)
+                            || Arrays.stream(mp3s).anyMatch(f -> f.getName().toLowerCase().contains(query));
+                    if (anyMatch) resultsList.child(buildFolderRow(sub));
+                }
+            }
+            File[] rootFiles = OpenSoundboardClient.soundDir.listFiles((d, n) -> n.endsWith(".mp3"));
+            if (rootFiles == null) rootFiles = new File[0];
+            appendSorted(rootFiles, query);
         }
     }
 
-    private record RowWidgets(ButtonComponent favBtn, LabelComponent nameLabel, ButtonComponent playBtn) {
+    private void appendSorted(File[] files, String query) {
+        List<File> filtered = Arrays.stream(files)
+                .filter(f -> f.getName().toLowerCase().contains(query))
+                .sorted(sortComparator())
+                .collect(Collectors.toList());
+        results.addAll(filtered);
+        filtered.forEach(f -> resultsList.child(buildRow(f)));
     }
 
-    private final Map<String, RowWidgets> rowWidgets = new HashMap<>();
+    private FlowLayout buildFolderRow(File dir) {
+        var row = Containers.horizontalFlow(Sizing.fill(), Sizing.content());
+        row.gap(3).padding(Insets.of(1)).verticalAlignment(VerticalAlignment.CENTER);
+        row.surface(Surface.flat(0x33FFFF00));
+
+        String label = GuiTools.trimName(client.textRenderer, "\uD83D\uDCC1 " + dir.getName(), listWidth - FAV_WIDTH - PLAY_WIDTH - 20);
+        var nameLabel = Components.label(Text.literal(label).formatted(Formatting.YELLOW));
+        nameLabel.horizontalTextAlignment(HorizontalAlignment.LEFT).horizontalSizing(Sizing.expand());
+
+        var openBtn = Components.button(Text.literal("\u25B6"), b -> {});
+        openBtn.sizing(Sizing.fixed(PLAY_WIDTH), Sizing.content());
+        openBtn.active(false);
+
+        row.child(openBtn);
+        row.child(Containers.horizontalFlow(Sizing.fixed(FAV_WIDTH), Sizing.content()));
+        row.child(nameLabel);
+        row.mouseDown().subscribe((mx, my, btn) -> {
+            currentFolder = dir;
+            SoundboardConfig.saveLastOpenedFolder(dir);
+            savedScrollPos = 0.0;
+            scanSounds();
+            return true;
+        });
+        return row;
+    }
+
+    private FlowLayout buildBackRow() {
+        var row = Containers.horizontalFlow(Sizing.fill(), Sizing.content());
+        row.gap(3).padding(Insets.of(1)).verticalAlignment(VerticalAlignment.CENTER);
+        row.surface(Surface.flat(0x33FFFFFF));
+
+        var icon = Components.button(Text.literal("\u2190"), b -> {});
+        icon.sizing(Sizing.fixed(PLAY_WIDTH), Sizing.content());
+        icon.active(false);
+
+        var nameLabel = Components.label(
+                Text.literal("\u2190 " + (currentFolder != null ? currentFolder.getName() : "")).formatted(Formatting.GRAY));
+        nameLabel.horizontalTextAlignment(HorizontalAlignment.LEFT).horizontalSizing(Sizing.expand());
+
+        row.child(icon);
+        row.child(Containers.horizontalFlow(Sizing.fixed(FAV_WIDTH), Sizing.content()));
+        row.child(nameLabel);
+        row.mouseDown().subscribe((mx, my, btn) -> {
+            currentFolder = null;
+            SoundboardConfig.saveLastOpenedFolder(null);
+            savedScrollPos = 0.0;
+            scanSounds();
+            return true;
+        });
+        return row;
+    }
 
     private FlowLayout buildRow(File file) {
         final String key = file.getName();
-
         var row = Containers.horizontalFlow(Sizing.fill(), Sizing.content());
         row.gap(3).padding(Insets.of(1)).verticalAlignment(VerticalAlignment.CENTER).id(key);
 
@@ -447,37 +451,20 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         var nameLabel = Components.label(Text.empty());
         nameLabel.horizontalTextAlignment(HorizontalAlignment.LEFT);
 
-
         var playBtn = Components.button(Text.translatable("gui.opensoundboard.play"), b -> {
-            togglePlay(file);
-            refreshListVisuals();
+            togglePlay(file); refreshListVisuals();
         });
         playBtn.sizing(Sizing.fixed(PLAY_WIDTH), Sizing.content());
 
-        row.child(playBtn);
-        row.child(favBtn);
-        row.child(nameLabel);
-
+        row.child(playBtn).child(favBtn).child(nameLabel);
         rowWidgets.put(key, new RowWidgets(favBtn, nameLabel, playBtn));
 
-        row.mouseDown().subscribe((mouseX, mouseY, button) -> {
+        row.mouseDown().subscribe((mouseX, mouseY, btn) -> {
             selectSound(file);
-
             long now = System.currentTimeMillis();
-            boolean isDoubleClick =
-                    lastClickedFile != null
-                            && key.equals(lastClickedFile.getName())
-                            && (now - lastClickMs) <= DOUBLE_CLICK_WINDOW_MS;
-
-            if (isDoubleClick) {
-                togglePlay(file);
-                lastClickedFile = null;
-                lastClickMs = 0;
-            } else {
-                lastClickedFile = file;
-                lastClickMs = now;
-            }
-
+            if (lastClickedFile != null && key.equals(lastClickedFile.getName()) && (now - lastClickMs) <= DOUBLE_CLICK_WINDOW_MS) {
+                togglePlay(file); lastClickedFile = null; lastClickMs = 0;
+            } else { lastClickedFile = file; lastClickMs = now; }
             refreshListVisuals();
             return true;
         });
@@ -488,121 +475,76 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
     private void togglePlay(File file) {
         String key = file.getName();
-        if (SoundboardAudioSystem.isPlaying(key)) {
-            SoundboardAudioSystem.stop(key);
-        } else {
-            var current = SoundboardConfig.get(key);
-            SoundboardAudioSystem.playFile(file, current.getLocalVolume(), current.getPlayerVolume());
-        }
+        if (SoundboardAudioSystem.isPlaying(key)) SoundboardAudioSystem.stop(key);
+        else SoundboardAudioSystem.playFile(file, SoundboardConfig.get(key).getLocalVolume(), SoundboardConfig.get(key).getPlayerVolume());
     }
 
     private void updateRowVisuals(File file, FlowLayout row) {
         final String key = file.getName();
-
         boolean isSelected = selectedFile != null && key.equals(selectedFile.getName());
-        boolean isPlaying = SoundboardAudioSystem.isPlaying(key);
-
+        boolean isPlaying  = SoundboardAudioSystem.isPlaying(key);
         row.surface(isSelected ? Surface.flat(0x33FFFFFF) : Surface.BLANK);
-
         RowWidgets w = rowWidgets.get(key);
         if (w == null) return;
-
-        var data = SoundboardConfig.get(key);
-        w.favBtn().setMessage(GuiTools.favoriteLabel(data.isFavorite()));
-
-        // Your old trim math assumed 3 children; still valid as "available space" estimate
-        int available = listWidth - FAV_WIDTH - PLAY_WIDTH - 20;
+        w.favBtn().setMessage(GuiTools.favoriteLabel(SoundboardConfig.get(key).isFavorite()));
         w.nameLabel().text(Text.literal(
-                GuiTools.trimName(client.textRenderer, GuiTools.baseName(file), available)
+                GuiTools.trimName(client.textRenderer, GuiTools.baseName(file), listWidth - FAV_WIDTH - PLAY_WIDTH - 20)
         ).formatted(isPlaying ? Formatting.YELLOW : Formatting.WHITE));
-
         w.playBtn().setMessage(isPlaying
                 ? Text.translatable("gui.opensoundboard.stop").formatted(Formatting.RED)
                 : Text.translatable("gui.opensoundboard.play"));
     }
 
-
     private void selectSound(File file) {
-        this.selectedFile = file;
-        this.isBinding = false;
-
+        selectedFile = file; isBinding = false;
         if (file == null) {
             detailLabel.text(Text.translatable("gui.opensoundboard.select_hint").formatted(Formatting.GRAY));
-
             detailLocalSlider.active(false);
             if (detailPlayerSlider != null) detailPlayerSlider.active(false);
             detailBindBtn.active(false);
             detailBindBtn.setMessage(Text.translatable("gui.opensoundboard.keybind.none"));
-
-            timelineSlider.active(false);
-            timeField.setEditable(false);
-            pauseBtn.active(false);
-            setStartBtn.active(false);
-            backBtn.active(false);
-            forwardBtn.active(false);
-
+            setPlaybackControlsActive(false);
             timelineSlider.value(0);
             if (!timeField.isFocused()) timeField.setText("0:00.0");
         } else {
             var data = SoundboardConfig.get(file.getName());
-
             detailLabel.text(Text.translatable("gui.opensoundboard.settings_for", file.getName()).formatted(Formatting.YELLOW));
-
-            detailLocalSlider.active(true);
-            detailLocalSlider.value(data.getLocalVolume());
-
+            detailLocalSlider.active(true); detailLocalSlider.value(data.getLocalVolume());
             if (!SoundboardConfig.data.isSyncAudio() && detailPlayerSlider != null) {
-                detailPlayerSlider.active(true);
-                detailPlayerSlider.value(data.getPlayerVolume());
+                detailPlayerSlider.active(true); detailPlayerSlider.value(data.getPlayerVolume());
             }
-
-            detailBindBtn.active(true);
-            updateBindButtonText(data.getKeybind());
-
-            boolean isPlaying = SoundboardAudioSystem.isPlaying(file.getName());
-            timelineSlider.active(isPlaying);
-            timeField.setEditable(isPlaying);
-            pauseBtn.active(isPlaying);
-            setStartBtn.active(isPlaying);
-            backBtn.active(isPlaying);
-            forwardBtn.active(isPlaying);
-
-            if (isPlaying) {
+            detailBindBtn.active(true); updateBindButtonText(data.getKeybind());
+            boolean playing = SoundboardAudioSystem.isPlaying(file.getName());
+            setPlaybackControlsActive(playing);
+            if (playing) {
                 timelineSlider.value(SoundboardAudioSystem.getProgress(file.getName()));
-                if (!timeField.isFocused())
-                    timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
+                if (!timeField.isFocused()) timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
             } else {
                 timelineSlider.value(0);
                 if (!timeField.isFocused()) timeField.setText("0:00.0");
             }
             pauseBtn.setMessage(SoundboardAudioSystem.isPaused(file.getName()) ? Text.literal("\u25B6") : Text.literal("\u23F8"));
         }
-
         refreshListVisuals();
     }
 
     private void updateSelectedVolume(Double local, Double player) {
         var file = selectedFile;
         if (file == null) return;
-
         var data = SoundboardConfig.get(file.getName());
-
         if (SoundboardConfig.data.isSyncAudio()) {
-            float vol = (local != null ? local.floatValue() : (player != null ? player.floatValue() : 1f));
+            float vol = local != null ? local.floatValue() : (player != null ? player.floatValue() : 1f);
             for (var entry : SoundboardConfig.sounds().entrySet()) {
-                entry.getValue().setLocalVolume(vol);
-                entry.getValue().setPlayerVolume(vol);
+                entry.getValue().setLocalVolume(vol); entry.getValue().setPlayerVolume(vol);
                 SoundboardAudioSystem.setVolume(entry.getKey(), vol, vol);
             }
-            data.setLocalVolume(vol);
-            data.setPlayerVolume(vol);
+            data.setLocalVolume(vol); data.setPlayerVolume(vol);
             SoundboardAudioSystem.setVolume(file.getName(), vol, vol);
         } else {
-            if (local != null) data.setLocalVolume(local.floatValue());
+            if (local  != null) data.setLocalVolume(local.floatValue());
             if (player != null) data.setPlayerVolume(player.floatValue());
             SoundboardAudioSystem.setVolume(file.getName(), data.getLocalVolume(), data.getPlayerVolume());
         }
-
         SoundboardConfig.save();
     }
 
@@ -611,58 +553,43 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // enter-to-play-first while searching (legacy)
-        if (queryField.isFocused() && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
-            if (!results.isEmpty()) {
-                var file = results.get(0);
-                selectSound(file);
-                togglePlay(file);
-                refreshListVisuals();
-                return true;
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        boolean handled = super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+        if (scrollContainer != null) {
+            double contentH = resultsList.height(), viewH = scrollContainer.height();
+            if (contentH > viewH) {
+                double delta = (verticalAmount < 0 ? 14.0 : -14.0) / (contentH - viewH);
+                savedScrollPos = Math.max(0.0, Math.min(1.0, savedScrollPos + delta));
             }
         }
+        return handled;
+    }
 
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (queryField.isFocused() && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
+            if (!results.isEmpty()) { var f = results.get(0); selectSound(f); togglePlay(f); refreshListVisuals(); return true; }
+        }
         if (isBinding && selectedFile != null) {
             var data = SoundboardConfig.get(selectedFile.getName());
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-                data.setKeybind(null);
-                pendingKeybind = null;
-                SoundboardConfig.save();
-                updateBindButtonText(data.getKeybind());
-                isBinding = false;
-                return true;
-            } else {
-                // Don't finalize immediately; user might be holding modifiers (e.g. CTRL)
-                pendingKeybind = new SoundboardConfig.KeyBind(keyCode, scanCode, modifiers);
-                // keep listening until all keys are released
-                detailBindBtn.setMessage(GuiTools.keyBindLabel(pendingKeybind).copy().formatted(Formatting.YELLOW));
-                return true;
+                data.setKeybind(null); pendingKeybind = null; SoundboardConfig.save();
+                updateBindButtonText(data.getKeybind()); isBinding = false; return true;
             }
-        }
-
-        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-            close();
+            pendingKeybind = new SoundboardConfig.KeyBind(keyCode, scanCode, modifiers);
+            detailBindBtn.setMessage(GuiTools.keyBindLabel(pendingKeybind).copy().formatted(Formatting.YELLOW));
             return true;
         }
-
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) { close(); return true; }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
-        if (isBinding && selectedFile != null) {
-            // We only get the current modifier state, so we use 'modifiers == 0' as "all released"
-            if (modifiers == 0) {
-                var data = SoundboardConfig.get(selectedFile.getName());
-                data.setKeybind(pendingKeybind);
-                pendingKeybind = null;
-                SoundboardConfig.save();
-                updateBindButtonText(data.getKeybind());
-                isBinding = false;
-                return true;
-            }
-            return true;
+        if (isBinding && selectedFile != null && modifiers == 0) {
+            var data = SoundboardConfig.get(selectedFile.getName());
+            data.setKeybind(pendingKeybind); pendingKeybind = null; SoundboardConfig.save();
+            updateBindButtonText(data.getKeybind()); isBinding = false; return true;
         }
         return super.keyReleased(keyCode, scanCode, modifiers);
     }
@@ -670,114 +597,58 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     @Override
     public void tick() {
         super.tick();
-
-        if (pendingScrollTarget != null) {
-            scrollToSound(pendingScrollTarget);
-            pendingScrollTarget = null;
-        }
-
+        if (pendingScrollTarget != null) { scrollToSound(pendingScrollTarget); pendingScrollTarget = null; }
         refreshDetailsUiState();
         refreshListVisuals();
     }
 
     private void refreshDetailsUiState() {
+        loopBtn.setMessage(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()));
         var file = selectedFile;
-        if (file == null) {
-            timelineSlider.active(false);
-            timeField.setEditable(false);
-            pauseBtn.active(false);
-            setStartBtn.active(false);
-            backBtn.active(false);
-            forwardBtn.active(false);
-            loopBtn.setMessage(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()));
-            return;
-        }
-
-        boolean isPlaying = SoundboardAudioSystem.isPlaying(file.getName());
-        timelineSlider.active(isPlaying);
-        timeField.setEditable(isPlaying);
-        pauseBtn.active(isPlaying);
-        setStartBtn.active(isPlaying);
-        backBtn.active(isPlaying);
-        forwardBtn.active(isPlaying);
-
-        if (isPlaying) {
-            if (!timelineSlider.isFocused()) {
-                float p = SoundboardAudioSystem.getProgress(file.getName());
-                if (p >= 0) timelineSlider.value(p);
-            }
-            if (!timeField.isFocused()) {
-                timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
-            }
+        if (file == null) { setPlaybackControlsActive(false); return; }
+        boolean playing = SoundboardAudioSystem.isPlaying(file.getName());
+        setPlaybackControlsActive(playing);
+        if (playing) {
+            if (!timelineSlider.isFocused()) { float p = SoundboardAudioSystem.getProgress(file.getName()); if (p >= 0) timelineSlider.value(p); }
+            if (!timeField.isFocused()) timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
             pauseBtn.setMessage(SoundboardAudioSystem.isPaused(file.getName()) ? Text.literal("\u25B6") : Text.literal("\u23F8"));
         } else {
             if (!timelineSlider.isFocused()) timelineSlider.value(0);
             if (!timeField.isFocused()) timeField.setText("0:00.0");
         }
-
-        loopBtn.setMessage(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()));
     }
 
     private void refreshListVisuals() {
         for (var child : resultsList.children()) {
-            if (!(child instanceof FlowLayout row)) continue;
-            String id = row.id();
-            if (id == null) continue;
-            File match = results.stream().filter(f -> Objects.equals(f.getName(), id)).findFirst().orElse(null);
-            if (match != null) updateRowVisuals(match, row);
+            if (!(child instanceof FlowLayout row) || row.id() == null) continue;
+            results.stream().filter(f -> Objects.equals(f.getName(), row.id())).findFirst()
+                    .ifPresent(f -> updateRowVisuals(f, row));
         }
     }
 
-    /**
-     * Renames mp3 files in the sound dir to a sanitized filename.
-     * Also migrates the per-song config entry key from the old name to the new name.
-     */
     private void sanitizeAndRenameSoundFiles() {
         File[] allFiles = OpenSoundboardClient.soundDir.listFiles((dir, name) -> name.endsWith(".mp3"));
         if (allFiles == null || allFiles.length == 0) return;
-
         boolean changed = false;
-
         for (File file : allFiles) {
             String oldName = file.getName();
             String base = oldName.substring(0, oldName.length() - 4);
-            String sanitizedBase = de.xcrafttm.opensoundboard.tools.YtDlpManager.sanitizeTrackName(base);
-            if (sanitizedBase.isBlank()) sanitizedBase = "track";
-
-            String newName = sanitizedBase + ".mp3";
+            String sanitized = de.xcrafttm.opensoundboard.tools.YtDlpManager.sanitizeTrackName(base);
+            if (sanitized.isBlank()) sanitized = "track";
+            String newName = sanitized + ".mp3";
             if (newName.equals(oldName)) continue;
-
             File target = new File(OpenSoundboardClient.soundDir, newName);
-            // Avoid collisions: "name (2).mp3", "name (3).mp3", ...
-            if (target.exists()) {
-                int i = 2;
-                while (target.exists()) {
-                    target = new File(OpenSoundboardClient.soundDir, sanitizedBase + " (" + i + ").mp3");
-                    i++;
-                }
-            }
-
-            // rename on disk
-            boolean ok = file.renameTo(target);
-            if (!ok) continue;
-
-            // migrate selected file pointer
-            if (selectedFile != null && selectedFile.getName().equals(oldName)) {
-                selectedFile = target;
-            }
-
-            // migrate config entry key (preserve settings)
+            for (int i = 2; target.exists(); i++)
+                target = new File(OpenSoundboardClient.soundDir, sanitized + " (" + i + ").mp3");
+            if (!file.renameTo(target)) continue;
+            SoundboardAudioSystem.invalidateCache(oldName);
+            SoundboardAudioSystem.preloadFile(target);
+            if (selectedFile != null && selectedFile.getName().equals(oldName)) selectedFile = target;
             if (SoundboardConfig.data != null) {
-                var oldData = SoundboardConfig.sounds().remove(oldName);
-                if (oldData != null) {
-                    SoundboardConfig.sounds().put(target.getName(), oldData);
-                    changed = true;
-                }
+                var old = SoundboardConfig.sounds().remove(oldName);
+                if (old != null) { SoundboardConfig.sounds().put(target.getName(), old); changed = true; }
             }
         }
-
-        if (changed) {
-            SoundboardConfig.save();
-        }
+        if (changed) SoundboardConfig.save();
     }
 }

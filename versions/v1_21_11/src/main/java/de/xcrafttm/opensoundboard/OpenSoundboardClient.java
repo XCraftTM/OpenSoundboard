@@ -58,8 +58,11 @@ public class OpenSoundboardClient implements ClientModInitializer {
             // Use raw GLFW state so we can detect key-held even while a screen is open
             long window = client.getWindow().getHandle();
             int keyCode = wheelKey.getBoundKeyCode();
-            boolean wheelHeld = keyCode != GLFW.GLFW_KEY_UNKNOWN
-                    && GLFW.glfwGetKey(window, keyCode) == GLFW.GLFW_PRESS;
+            InputUtil.Type keyType = wheelKey.getBoundKeyType();
+            boolean wheelHeld = keyCode != GLFW.GLFW_KEY_UNKNOWN && switch (keyType) {
+                case MOUSE   -> GLFW.glfwGetMouseButton(window, keyCode) == GLFW.GLFW_PRESS;
+                default      -> GLFW.glfwGetKey(window, keyCode) == GLFW.GLFW_PRESS;
+            };
 
             // Wheel overlay: open when wheel keybind is held and no screen is open
             if (client.currentScreen == null && wheelHeld) {

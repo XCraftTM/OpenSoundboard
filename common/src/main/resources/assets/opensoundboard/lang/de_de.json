@@ -49,6 +49,15 @@
   "option.opensoundboard.keybindMode.pause_resume": "Pause/Fortsetzen",
   "option.opensoundboard.keybindMode.play_restart": "Neustart",
 
+  "option.opensoundboard.showSubfolders": "Unterordner anzeigen",
+  "tooltip.opensoundboard.showSubfolders": "Gruppiert Sounds nach Unterordner (Tiefe 1). Ordner können betreten werden.",
+
+  "gui.opensoundboard.sort.name": "Name",
+  "gui.opensoundboard.sort.date": "Datum",
+  "gui.opensoundboard.sort.length": "Länge",
+  "tooltip.opensoundboard.sortMode": "Sortiermodus wechseln: Name → Datum → Länge",
+  "tooltip.opensoundboard.sortDir": "Sortierrichtung umschalten (aufsteigend / absteigend)",
+
   "gui.opensoundboard.title": "Soundboard",
   "text.soundboard.title": "\u00a7f\u00a7lSoundboard",
 
@@ -112,6 +121,15 @@
   "tooltip.opensoundboard.wheelSoundsPerPage": "Wie viele Sounds pro Seite im Sound-Rad angezeigt werden.",
   "option.opensoundboard.wheelFavoritesOnly": "Nur Favoriten",
   "tooltip.opensoundboard.wheelFavoritesOnly": "Nur favorisierte Sounds im Sound-Rad anzeigen.",
+  "option.opensoundboard.wheelCustomLayout": "Benutzerdefiniertes Layout",
+  "tooltip.opensoundboard.wheelCustomLayout": "Bestimmte Sounds jedem Slot im Rad manuell zuweisen statt automatisch zu befüllen.",
+  "gui.opensoundboard.wheel.editor.open": "Rad-Layout bearbeiten",
+  "gui.opensoundboard.wheel.editor.title": "Rad-Layout Editor",
+  "gui.opensoundboard.wheel.editor.hint": "Slot anklicken",
+  "gui.opensoundboard.wheel.editor.empty_slot": "[ Leer ]",
+  "gui.opensoundboard.wheel.picker.title": "Sound auswählen",
+  "gui.opensoundboard.wheel.picker.clear": "Leeren",
+  "gui.opensoundboard.wheel.picker.preview": "Vorschau (erstes Drittel, max. 15 Sek.)",
   "gui.opensoundboard.wheel.page": "Seite %s / %s",
   "gui.opensoundboard.wheel.empty": "Keine Sounds gefunden"
 }

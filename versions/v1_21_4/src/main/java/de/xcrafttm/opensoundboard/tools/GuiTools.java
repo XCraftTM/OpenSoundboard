@@ -74,6 +74,7 @@ public final class GuiTools {
                 secs = dotParts[0].isEmpty() ? 0 : Long.parseLong(dotParts[0]);
                 String frac = dotParts[1];
                 if (!frac.isEmpty()) {
+                    // pad or truncate to 3 digits for millis
                     if (frac.length() == 1) frac = frac + "00";
                     else if (frac.length() == 2) frac = frac + "0";
                     else frac = frac.substring(0, 3);

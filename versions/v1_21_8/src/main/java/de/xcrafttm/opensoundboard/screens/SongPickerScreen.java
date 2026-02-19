@@ -6,11 +6,11 @@ import de.xcrafttm.opensoundboard.tools.GuiTools;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.Components;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
-import io.wispforest.owo.ui.component.UIComponents;
+import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
-import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /**
  * Full-screen overlay that lists every song.
@@ -60,7 +59,7 @@ public class SongPickerScreen extends BaseOwoScreen<FlowLayout> {
 
     @Override
     protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+        return OwoUIAdapter.create(this, Containers::verticalFlow);
     }
 
     @Override
@@ -73,35 +72,35 @@ public class SongPickerScreen extends BaseOwoScreen<FlowLayout> {
                 .padding(Insets.of(10));
 
         // Title
-        root.child(UIComponents.label(
+        root.child(Components.label(
                 Text.translatable("gui.opensoundboard.wheel.picker.title").formatted(Formatting.BOLD))
                 .horizontalTextAlignment(HorizontalAlignment.CENTER)
                 .horizontalSizing(Sizing.fixed(colW))
                 .margins(Insets.bottom(4)));
 
         // Search bar
-        searchField = UIComponents.textBox(Sizing.fixed(colW));
+        searchField = Components.textBox(Sizing.fixed(colW));
         searchField.setPlaceholder(Text.translatable("gui.opensoundboard.search_hint"));
         searchField.onChanged().subscribe(q -> buildList());
         root.child(searchField.margins(Insets.bottom(6)));
 
         // "Clear slot" button at the top
-        var clearBtn = UIComponents.button(
+        var clearBtn = Components.button(
                 Text.translatable("gui.opensoundboard.wheel.picker.clear").formatted(Formatting.RED),
                 b -> pickAndClose(null));
         clearBtn.sizing(Sizing.fixed(CLEAR_BTN_W), Sizing.content());
         root.child(clearBtn.margins(Insets.bottom(6)));
 
         // Scrollable list
-        list = UIContainers.verticalFlow(Sizing.fixed(colW), Sizing.content()).gap(2);
-        var scroll = UIContainers.verticalScroll(Sizing.fixed(colW), Sizing.expand(), list);
+        list = Containers.verticalFlow(Sizing.fixed(colW), Sizing.content()).gap(2);
+        var scroll = Containers.verticalScroll(Sizing.fixed(colW), Sizing.expand(), list);
         scroll.surface(Surface.flat(0x66000000)).padding(Insets.of(4));
         root.child(scroll);
 
         buildList();
 
         // Cancel
-        root.child(UIComponents.button(Text.translatable("gui.cancel"), b -> closeWithoutPick())
+        root.child(Components.button(Text.translatable("gui.cancel"), b -> closeWithoutPick())
                 .sizing(Sizing.fixed(100), Sizing.content())
                 .margins(Insets.top(6)));
     }
@@ -131,12 +130,12 @@ public class SongPickerScreen extends BaseOwoScreen<FlowLayout> {
         boolean isFav = SoundboardConfig.get(name).isFavorite();
 
         // Outer row spans the full column width and acts as one merged component
-        var row = (FlowLayout) UIContainers.horizontalFlow(Sizing.fixed(colW), Sizing.content())
+        var row = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(colW), Sizing.content())
                 .verticalAlignment(VerticalAlignment.CENTER)
                 .surface(Surface.DARK_PANEL);
 
         // ▶ preview button – fixed width on the left
-        ButtonComponent previewBtn = UIComponents.button(Text.literal("▶"), b -> togglePreview(file, b));
+        ButtonComponent previewBtn = Components.button(Text.literal("▶"), b -> togglePreview(file, b));
         previewBtn.sizing(Sizing.fixed(PREVIEW_BTN_W), Sizing.content());
         previewBtn.tooltip(Text.translatable("gui.opensoundboard.wheel.picker.preview"));
 
@@ -146,12 +145,12 @@ public class SongPickerScreen extends BaseOwoScreen<FlowLayout> {
         if (isFav) labelStr = "★ " + labelStr;
         labelStr = GuiTools.trimName(this.textRenderer, labelStr, trimWidth);
 
-        LabelComponent nameLabel = UIComponents.label(
+        LabelComponent nameLabel = Components.label(
                 Text.literal(labelStr).formatted(isFav ? Formatting.YELLOW : Formatting.WHITE));
         nameLabel.horizontalTextAlignment(HorizontalAlignment.LEFT);
         nameLabel.horizontalSizing(Sizing.expand());
         nameLabel.margins(Insets.left(4));
-        nameLabel.mouseDown().subscribe((mx, my) -> {
+        nameLabel.mouseDown().subscribe((mx, my, btn) -> {
             pickAndClose(name);
             return true;
         });

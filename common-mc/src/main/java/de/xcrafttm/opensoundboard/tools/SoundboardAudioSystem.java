@@ -5,6 +5,7 @@ import de.maxhenkel.voicechat.api.VoicechatClientApi;
 import de.maxhenkel.voicechat.api.audiochannel.ClientStaticAudioChannel;
 import de.maxhenkel.voicechat.api.events.ClientVoicechatConnectionEvent;
 import de.maxhenkel.voicechat.api.events.MergeClientSoundEvent;
+import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
@@ -15,7 +16,11 @@ import java.nio.file.Files;
 import java.util.Iterator;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.Arrays;
 
 public final class SoundboardAudioSystem {
 
@@ -26,11 +31,77 @@ public final class SoundboardAudioSystem {
     private static final ConcurrentLinkedQueue<PlayingSound> activeSounds = new ConcurrentLinkedQueue<>();
     private static final int FRAME_SIZE = 960;
 
+    /** Decoded PCM cache keyed by filename (e.g. "MySong.mp3"). Populated by preloadAll(). */
+    private static final ConcurrentHashMap<String, short[]> pcmCache = new ConcurrentHashMap<>();
+
+    /** Single-threaded background executor for preloading – avoids hammering CPU on startup. */
+    private static final ExecutorService preloadExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "opensoundboard-preload");
+        t.setDaemon(true);
+        t.setPriority(Thread.MIN_PRIORITY);
+        return t;
+    });
+
     private SoundboardAudioSystem() {
     }
 
     public static void initialize(VoicechatApi api) {
         SoundboardAudioSystem.api = api;
+    }
+
+    // ----------------------------------------------------------------
+    // Preload / cache management
+    // ----------------------------------------------------------------
+
+    /**
+     * Submits background decode tasks for every MP3 in the sound directory
+     * (and depth-1 subfolders) that is not yet cached.
+     * Safe to call multiple times (e.g. after Refresh) – already-cached files are skipped.
+     */
+    public static void preloadAll() {
+        if (api == null) return;
+        File soundDir = OpenSoundboardClient.soundDir;
+        if (soundDir == null || !soundDir.exists()) return;
+
+        // Collect all mp3 files (root + depth-1 subdirs)
+        java.util.List<File> files = new java.util.ArrayList<>();
+        File[] rootFiles = soundDir.listFiles((d, n) -> n.endsWith(".mp3"));
+        if (rootFiles != null) files.addAll(Arrays.asList(rootFiles));
+        File[] subdirs = soundDir.listFiles(File::isDirectory);
+        if (subdirs != null) {
+            for (File sub : subdirs) {
+                File[] subFiles = sub.listFiles((d, n) -> n.endsWith(".mp3"));
+                if (subFiles != null) files.addAll(Arrays.asList(subFiles));
+            }
+        }
+
+        for (File file : files) {
+            if (!pcmCache.containsKey(file.getName())) {
+                preloadFile(file);
+            }
+        }
+    }
+
+    /** Decode a single file in the background and store the result in the cache. */
+    public static void preloadFile(File file) {
+        if (api == null) return;
+        preloadExecutor.submit(() -> {
+            if (pcmCache.containsKey(file.getName())) return; // already done
+            short[] pcm = decodeMp3(file);
+            if (pcm != null && pcm.length > 0) {
+                pcmCache.put(file.getName(), pcm);
+            }
+        });
+    }
+
+    /** Remove a file from the cache (call when a file is deleted or renamed). */
+    public static void invalidateCache(String fileName) {
+        pcmCache.remove(fileName);
+    }
+
+    /** Remove all cached data. */
+    public static void clearCache() {
+        pcmCache.clear();
     }
 
     public static void onClientConnection(ClientVoicechatConnectionEvent event) {
@@ -46,6 +117,9 @@ public final class SoundboardAudioSystem {
             if (localAudioChannel != null) {
                 localAudioChannel.setCategory(category.getId());
             }
+
+            // Preload all sounds now that the decoder is available
+            preloadAll();
         } else {
             stopAll();
             clientApi = null;
@@ -191,28 +265,41 @@ public final class SoundboardAudioSystem {
             stopAll();
         }
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                short[] pcmData = decodeMp3(file);
-                if (pcmData != null && pcmData.length > 0) {
-                    PlayingSound sound = new PlayingSound(file.getName(), pcmData, localVol, playerVol);
-                    var data = SoundboardConfig.get(file.getName());
-                    if (data.getStartingPoint() > 0f) {
-                        sound.setCursor(data.getStartingPoint());
+        short[] cached = pcmCache.get(file.getName());
+        if (cached != null) {
+            // Instant playback from cache – copy the array so each PlayingSound has its own cursor
+            short[] pcmData = Arrays.copyOf(cached, cached.length);
+            PlayingSound sound = new PlayingSound(file.getName(), pcmData, localVol, playerVol);
+            var data = SoundboardConfig.get(file.getName());
+            if (data.getStartingPoint() > 0f) sound.setCursor(data.getStartingPoint());
+            sound.isLooping = SoundboardConfig.data.isLoopAll();
+            activeSounds.add(sound);
+        } else {
+            // Not cached yet – decode async, cache the result, then start playing
+            CompletableFuture.runAsync(() -> {
+                try {
+                    short[] pcmData = decodeMp3(file);
+                    if (pcmData != null && pcmData.length > 0) {
+                        pcmCache.put(file.getName(), pcmData);
+                        short[] copy = Arrays.copyOf(pcmData, pcmData.length);
+                        PlayingSound sound = new PlayingSound(file.getName(), copy, localVol, playerVol);
+                        var data = SoundboardConfig.get(file.getName());
+                        if (data.getStartingPoint() > 0f) sound.setCursor(data.getStartingPoint());
+                        sound.isLooping = SoundboardConfig.data.isLoopAll();
+                        activeSounds.add(sound);
+                    } else {
+                        client.execute(() -> {
+                            if (client.player != null) {
+                                client.player.sendMessage(
+                                    Text.translatable("message.opensoundboard.decode_failed", file.getName()), false);
+                            }
+                        });
                     }
-                    sound.isLooping = SoundboardConfig.data.isLoopAll();
-                    activeSounds.add(sound);
-                } else {
-                    client.execute(() -> {
-                        if (client.player != null) {
-                            client.player.sendMessage(Text.translatable("message.opensoundboard.decode_failed", file.getName()), false);
-                        }
-                    });
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
+            });
+        }
     }
 
     public static boolean isPlaying(String file) {
@@ -294,20 +381,24 @@ public final class SoundboardAudioSystem {
     }
 
     public static int getDurationSeconds(String file) {
+        // Check active sounds first
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) {
-                return s.durationSeconds();
-            }
+            if (s.name.equals(file)) return s.durationSeconds();
         }
+        // Fall back to cache
+        short[] cached = pcmCache.get(file);
+        if (cached != null) return cached.length / 48000;
         return 0;
     }
 
     public static long getDurationMillis(String file) {
+        // Check active sounds first
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) {
-                return s.durationMillis();
-            }
+            if (s.name.equals(file)) return s.durationMillis();
         }
+        // Fall back to cache
+        short[] cached = pcmCache.get(file);
+        if (cached != null) return (long) cached.length * 1000L / 48000L;
         return 0;
     }
 

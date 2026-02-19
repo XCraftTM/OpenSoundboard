@@ -4,16 +4,15 @@ import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.config.WheelLayoutConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
-import de.xcrafttm.opensoundboard.tools.WheelLayout;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
+import de.xcrafttm.opensoundboard.tools.WheelLayout;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.UIComponents;
-import io.wispforest.owo.ui.container.UIContainers;
+import io.wispforest.owo.ui.component.Components;
+import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.input.KeyInput;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -25,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
 
@@ -67,7 +65,7 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
 
     @Override
     protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
-        return OwoUIAdapter.create(this, UIContainers::verticalFlow);
+        return OwoUIAdapter.create(this, Containers::verticalFlow);
     }
 
     @Override
@@ -104,7 +102,7 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
                         String.valueOf(page + 1), String.valueOf(totalPages())).getString();
 
         int centerW = 120;
-        ButtonComponent centerBtn = UIComponents.button(Text.literal(pageText), b -> {});
+        ButtonComponent centerBtn = Components.button(Text.literal(pageText), b -> {});
         centerBtn.sizing(Sizing.fixed(centerW), Sizing.fixed(BUTTON_H));
         centerBtn.positioning(Positioning.absolute(cx - centerW / 2, cy - BUTTON_H / 2));
         centerBtn.active(false);
@@ -145,12 +143,12 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
                     if (isPlaying) buttonText.append(Text.literal(" ▶").formatted(Formatting.GREEN));
                 }
 
-                ButtonComponent btn = UIComponents.button(buttonText, b -> {});
+                ButtonComponent btn = Components.button(buttonText, b -> {});
                 btn.sizing(Sizing.fixed(BUTTON_W), Sizing.fixed(BUTTON_H));
                 btn.positioning(Positioning.absolute(pos[0], pos[1]));
 
                 if (isBack) {
-                    btn.mouseDown().subscribe((mx, my) -> {
+                    btn.mouseDown().subscribe((mx, my, b) -> {
                         currentFolder = null;
                         SoundboardConfig.saveLastOpenedFolder(null);
                         page = 0;
@@ -160,7 +158,7 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
                     });
                 } else if (isFolder) {
                     final File folderFile = file;
-                    btn.mouseDown().subscribe((mx, my) -> {
+                    btn.mouseDown().subscribe((mx, my, b) -> {
                         currentFolder = folderFile;
                         SoundboardConfig.saveLastOpenedFolder(folderFile);
                         page = 0;
@@ -173,7 +171,7 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
                 root.child(btn);
                 soundButtons.add(btn);
             } else {
-                ButtonComponent filler = UIComponents.button(Text.empty(), b -> {});
+                ButtonComponent filler = Components.button(Text.empty(), b -> {});
                 filler.sizing(Sizing.fixed(BUTTON_W), Sizing.fixed(BUTTON_H));
                 filler.positioning(Positioning.absolute(pos[0], pos[1]));
                 filler.active(false);
@@ -301,12 +299,12 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
-    public boolean keyPressed(KeyInput key) {
-        if (key.getKeycode() == GLFW.GLFW_KEY_ESCAPE) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             close();
             return true;
         }
-        return super.keyPressed(key);
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     // ---------------------------------------------------------------
