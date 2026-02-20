@@ -1,12 +1,11 @@
 ﻿## OpenSoundboard 0.2.1
 
 ### Changes
-- Removed the right-click context menu (rename/delete) from the sound list in all versions — it was unreliable and caused visual glitches, especially in older MC versions.
-
-### Bug Fixes
-- Fixed compile errors in 1.21.1, 1.21.4, 1.21.5, and 1.21.8 caused by BOM characters and incorrect API usage after the previous migration.
-- Fixed `SoundboardScreen` not compiling in 1.21.1–1.21.8 due to `KeyInput` / `UIContainers` references that don't exist in those versions.
-- All six supported versions (1.21.1, 1.21.4, 1.21.5, 1.21.8, 1.21.10, 1.21.11) now compile cleanly.
+- Improved Song List Performance
+- General Fixes and Optimizations
+- Fixed a Memory Leak that happened cause of the Preloading of all Tracks
+- Improved Pre-Loading of Track Durations
+- Song List Performance is now much better, even with a large amount of Tracks
 
 ---
 
