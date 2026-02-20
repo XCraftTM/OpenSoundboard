@@ -5,10 +5,14 @@ import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
-import io.wispforest.owo.ui.component.*;
-import io.wispforest.owo.ui.container.Containers;
+import io.wispforest.owo.ui.component.ButtonComponent;
+import io.wispforest.owo.ui.component.LabelComponent;
+import io.wispforest.owo.ui.component.SliderComponent;
+import io.wispforest.owo.ui.component.TextBoxComponent;
+import io.wispforest.owo.ui.component.Components;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.ScrollContainer;
+import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -27,6 +31,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     private static final int FAV_WIDTH  = 20;
     private static final int PLAY_WIDTH = 35;
 
+    // UI fields
     private TextBoxComponent queryField;
     private FlowLayout resultsList;
     private ScrollContainer<FlowLayout> scrollContainer;
@@ -43,6 +48,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     private ButtonComponent loopBtn;
     private ButtonComponent setStartBtn;
 
+    // State
     private File selectedFile = null;
     private boolean isBinding = false;
     private SoundboardConfig.KeyBind pendingKeybind = null;
@@ -51,11 +57,19 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     private long lastClickMs = 0;
     private String pendingScrollTarget = null;
     private static File currentFolder = null;
+    private ButtonComponent sortModeBtn;
+    private ButtonComponent sortDirBtn;
     private double savedScrollPos = 0.0;
     private int listWidth;
 
     private record RowWidgets(ButtonComponent favBtn, LabelComponent nameLabel, ButtonComponent playBtn) {}
     private final Map<String, RowWidgets> rowWidgets = new HashMap<>();
+    private final Map<String, FlowLayout> rowLayouts = new HashMap<>();
+    private final Map<String, File>       resultsMap = new HashMap<>();
+
+    // ---------------------------------------------------------------
+    // owo-ui setup
+    // ---------------------------------------------------------------
 
     @Override
     protected @NotNull OwoUIAdapter<FlowLayout> createAdapter() {
@@ -74,25 +88,28 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
                 .verticalAlignment(VerticalAlignment.TOP)
                 .padding(Insets.of(10));
 
+        // Title
         root.child(Components.label(Text.translatable("gui.opensoundboard.title").formatted(Formatting.BOLD))
                 .horizontalTextAlignment(HorizontalAlignment.CENTER)
                 .margins(Insets.bottom(5)));
 
+        // Search
         queryField = Components.textBox(Sizing.fixed(listWidth));
         queryField.setPlaceholder(Text.translatable("gui.opensoundboard.search_hint"));
         queryField.onChanged().subscribe(s -> scanSounds());
         root.child(queryField.margins(Insets.bottom(5)));
 
+        // Toolbar
         int buttonW = Math.max(20, (listWidth - BUTTON_SPACING * 5) / 6);
         var topButtons = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(listWidth), Sizing.content())
                 .gap(BUTTON_SPACING).margins(Insets.bottom(10));
 
-        topButtons.child(buildToolbarButton("gui.opensoundboard.refresh",  "tooltip.opensoundboard.refresh",  buttonW, b -> scanSounds()));
-        topButtons.child(buildToolbarButton("gui.opensoundboard.folder",   "tooltip.opensoundboard.folder",   buttonW, b -> Util.getOperatingSystem().open(OpenSoundboardClient.soundDir)));
-        topButtons.child(buildToolbarButton("gui.opensoundboard.config",   "tooltip.opensoundboard.config",   buttonW, b -> client.setScreen(new SoundboardConfigScreen(this))));
-        topButtons.child(buildToolbarButton("gui.opensoundboard.youtube",  "tooltip.opensoundboard.youtube",  buttonW, b -> client.setScreen(new YouTubeScreen(this))));
+        topButtons.child(buildToolbarButton("gui.opensoundboard.refresh",   "tooltip.opensoundboard.refresh",  buttonW, b -> refreshSounds()));
+        topButtons.child(buildToolbarButton("gui.opensoundboard.folder",    "tooltip.opensoundboard.folder",   buttonW, b -> Util.getOperatingSystem().open(OpenSoundboardClient.soundDir)));
+        topButtons.child(buildToolbarButton("gui.opensoundboard.config",    "tooltip.opensoundboard.config",   buttonW, b -> client.setScreen(new SoundboardConfigScreen(this))));
+        topButtons.child(buildToolbarButton("gui.opensoundboard.youtube",   "tooltip.opensoundboard.youtube",  buttonW, b -> client.setScreen(new YouTubeScreen(this))));
 
-        var sortModeBtn = Components.button(sortModeLabel(), b -> {
+        sortModeBtn = Components.button(sortModeLabel(), b -> {
             String[] modes = {"name", "date", "length"};
             String cur = SoundboardConfig.data.getSortMode();
             int next = 0;
@@ -106,7 +123,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         sortModeBtn.tooltip(Text.translatable("tooltip.opensoundboard.sortMode"));
         topButtons.child(sortModeBtn);
 
-        var sortDirBtn = Components.button(sortDirLabel(), b -> {
+        sortDirBtn = Components.button(sortDirLabel(), b -> {
             SoundboardConfig.data.setSortAscending(!SoundboardConfig.data.isSortAscending());
             SoundboardConfig.save();
             b.setMessage(sortDirLabel());
@@ -118,11 +135,13 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
         root.child(topButtons);
 
+        // Results list
         resultsList = Containers.verticalFlow(Sizing.fixed(listWidth), Sizing.content()).gap(2);
         scrollContainer = Containers.verticalScroll(Sizing.fixed(listWidth), Sizing.expand(), resultsList);
         scrollContainer.surface(Surface.flat(0x66000000)).padding(Insets.of(5));
         root.child(scrollContainer);
 
+        // Details pane
         buildDetailsPane(root);
 
         root.child(Components.button(Text.translatable("gui.done"), b -> close())
@@ -131,25 +150,35 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
         scanSounds();
 
-        String activeName = SoundboardAudioSystem.getActiveSoundName();
-        if (activeName != null) {
-            var file = new File(OpenSoundboardClient.soundDir, activeName);
-            if (file.exists()) { selectSound(file); pendingScrollTarget = activeName; }
+        File activeFile = SoundboardAudioSystem.getActiveSoundFile();
+        if (activeFile != null && activeFile.exists()) {
+            // If the active song is in a subfolder that isn't currently open, navigate into it first
+            File parent = activeFile.getParentFile();
+            if (parent != null && !parent.equals(OpenSoundboardClient.soundDir) && !parent.equals(currentFolder)) {
+                currentFolder = parent;
+                scanSounds(); // rebuild list now showing the right folder
+            }
+            selectSound(activeFile);
+            pendingScrollTarget = activeFile.getName();
         }
         refreshDetailsUiState();
     }
 
+    /** Builds the detail/controls section and appends it to root. */
     private void buildDetailsPane(FlowLayout root) {
         var pane = Containers.verticalFlow(Sizing.fixed(listWidth), Sizing.content());
         pane.surface(Surface.BLANK).padding(Insets.of(5));
 
         int innerW = Math.max(0, listWidth - 10);
-        int gap = 5, colW = (innerW - gap * 2) / 3;
+        int gap    = 5;
+        int colW   = (innerW - gap * 2) / 3;
 
+        // Detail title
         detailLabel = Components.label(Text.translatable("gui.opensoundboard.select_hint").formatted(Formatting.GRAY));
         detailLabel.horizontalSizing(Sizing.fill(100));
         pane.child(detailLabel.horizontalTextAlignment(HorizontalAlignment.CENTER).margins(Insets.bottom(5)));
 
+        // Volume sliders + keybind row
         var sliderRow = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(innerW), Sizing.content())
                 .gap(gap).verticalAlignment(VerticalAlignment.CENTER);
 
@@ -164,6 +193,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         });
         detailLocalSlider.onChanged().subscribe(value ->
                 updateSelectedVolume(value, SoundboardConfig.data.isSyncAudio() ? value : null));
+
         detailPlayerSlider.message(v ->
                 Text.translatable("gui.opensoundboard.player_volume", String.valueOf(pctFromSlider(v))));
         detailPlayerSlider.onChanged().subscribe(value -> updateSelectedVolume(null, value));
@@ -187,6 +217,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         sliderRow.child(detailBindBtn);
         pane.child(sliderRow.margins(Insets.top(2)));
 
+        // Timeline
         timelineSlider = Components.slider(Sizing.fill()).message(v -> {
             var file = selectedFile;
             if (file == null) return Text.literal("0:00.0 / 0:00.0");
@@ -213,8 +244,10 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         });
         pane.child(timelineSlider.margins(Insets.top(5)));
 
+        // Controls row
         var controlsRow = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.content())
                 .verticalAlignment(VerticalAlignment.CENTER);
+
         var leftCtrl   = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(80), Sizing.content()).horizontalAlignment(HorizontalAlignment.LEFT);
         var centerCtrl = (FlowLayout) Containers.horizontalFlow(Sizing.expand(), Sizing.content()).gap(5).horizontalAlignment(HorizontalAlignment.CENTER);
         var rightCtrl  = (FlowLayout) Containers.horizontalFlow(Sizing.fixed(80), Sizing.content()).horizontalAlignment(HorizontalAlignment.RIGHT);
@@ -229,15 +262,15 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             SoundboardAudioSystem.setCursor(selectedFile.getName(), Math.max(0f, Math.min(1f, millis / (float) duration)));
         });
 
-        stopButton = buildControlButton("\u23F9", "gui.opensoundboard.stop_all",     b -> SoundboardAudioSystem.stopAll());
-        backBtn    = buildControlButton("\u23EA", "gui.opensoundboard.skip_back",    b -> { if (selectedFile != null) SoundboardAudioSystem.skip(selectedFile.getName(), -SoundboardConfig.data.getSkipAmountSeconds()); });
-        pauseBtn   = buildControlButton("\u23F8", "gui.opensoundboard.pause_resume", b -> {
+        stopButton = buildControlButton("⏹", "gui.opensoundboard.stop_all",   b -> SoundboardAudioSystem.stopAll());
+        backBtn    = buildControlButton("⏪", "gui.opensoundboard.skip_back",  b -> { if (selectedFile != null) SoundboardAudioSystem.skip(selectedFile.getName(), -SoundboardConfig.data.getSkipAmountSeconds()); });
+        pauseBtn   = buildControlButton("⏸", "gui.opensoundboard.pause_resume", b -> {
             if (selectedFile == null) return;
             if (SoundboardAudioSystem.isPaused(selectedFile.getName())) SoundboardAudioSystem.resume(selectedFile.getName());
             else SoundboardAudioSystem.pause(selectedFile.getName());
         });
-        forwardBtn = buildControlButton("\u23E9", "gui.opensoundboard.skip_forward", b -> { if (selectedFile != null) SoundboardAudioSystem.skip(selectedFile.getName(), SoundboardConfig.data.getSkipAmountSeconds()); });
-        loopBtn = Components.button(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()), b -> {
+        forwardBtn = buildControlButton("⏩", "gui.opensoundboard.skip_forward", b -> { if (selectedFile != null) SoundboardAudioSystem.skip(selectedFile.getName(), SoundboardConfig.data.getSkipAmountSeconds()); });
+        loopBtn    = Components.button(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()), b -> {
             SoundboardConfig.data.setLoopAll(!SoundboardConfig.data.isLoopAll());
             SoundboardConfig.save();
             SoundboardAudioSystem.setGlobalLooping(SoundboardConfig.data.isLoopAll());
@@ -262,8 +295,13 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         rightCtrl.child(setStartBtn);
         controlsRow.child(leftCtrl).child(centerCtrl).child(rightCtrl);
         pane.child(controlsRow.margins(Insets.top(5)));
+
         root.child(pane);
     }
+
+    // ---------------------------------------------------------------
+    // Small builder helpers
+    // ---------------------------------------------------------------
 
     private ButtonComponent buildToolbarButton(String labelKey, String tooltipKey, int width, java.util.function.Consumer<ButtonComponent> action) {
         var btn = Components.button(Text.translatable(labelKey), action);
@@ -284,6 +322,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         catch (Exception ignored) { return 0; }
     }
 
+    /** Enable or disable all playback transport controls at once. */
     private void setPlaybackControlsActive(boolean active) {
         timelineSlider.active(active);
         timeField.setEditable(active);
@@ -293,11 +332,15 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         forwardBtn.active(active);
     }
 
-    private void scrollToSound(String name) {
-        if (name == null || scrollContainer == null || resultsList == null) return;
+    // ---------------------------------------------------------------
+    // Scroll
+    // ---------------------------------------------------------------
+
+    private void scrollToSound(String soundFileName) {
+        if (soundFileName == null || scrollContainer == null || resultsList == null) return;
         var children = resultsList.children();
         for (int i = 0; i < children.size(); i++) {
-            if (children.get(i) instanceof FlowLayout row && name.equals(row.id())) {
+            if (children.get(i) instanceof FlowLayout row && soundFileName.equals(row.id())) {
                 double t = children.size() <= 1 ? 0.0 : (i / (double) (children.size() - 1));
                 scrollContainer.scrollTo(Math.max(0.0, Math.min(1.0, t)));
                 return;
@@ -305,30 +348,44 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         }
     }
 
+    // ---------------------------------------------------------------
+    // Sort helpers
+    // ---------------------------------------------------------------
+
     private static Text sortModeLabel() {
         return Text.translatable("gui.opensoundboard.sort." + SoundboardConfig.data.getSortMode()).formatted(Formatting.AQUA);
     }
 
     private static Text sortDirLabel() {
-        return Text.literal(SoundboardConfig.data.isSortAscending() ? "\u25B2" : "\u25BC").formatted(Formatting.AQUA);
+        return Text.literal(SoundboardConfig.data.isSortAscending() ? "▲" : "▼").formatted(Formatting.AQUA);
     }
 
     private Comparator<File> sortComparator() {
         Comparator<File> base = switch (SoundboardConfig.data.getSortMode()) {
             case "date"   -> Comparator.comparingLong(File::lastModified);
-            case "length" -> Comparator.comparingLong(f -> { long d = SoundboardAudioSystem.getDurationMillis(f.getName()); return d > 0 ? d : 0L; });
+            case "length" -> Comparator.comparingLong(f -> {
+                long d = SoundboardAudioSystem.getDurationMillis(f.getName());
+                return d > 0 ? d : 0L;
+            });
             default       -> Comparator.comparing(f -> f.getName().toLowerCase());
         };
         if (!SoundboardConfig.data.isSortAscending()) base = base.reversed();
-        return Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite()).reversed().thenComparing(base);
+        return Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite())
+                .reversed().thenComparing(base);
     }
 
+    // ---------------------------------------------------------------
+    // Scan
+    // ---------------------------------------------------------------
+
+    /** Full rescan: rebuilds the list from disk. Does NOT sanitize file names (call refreshSounds() for that). */
     private void scanSounds() {
-        sanitizeAndRenameSoundFiles();
         String query = queryField.getText().trim().toLowerCase();
         resultsList.clearChildren();
         results = new ArrayList<>();
         rowWidgets.clear();
+        rowLayouts.clear();
+        resultsMap.clear();
 
         if (SoundboardConfig.data.isShowSubfolders()) scanWithSubfolders(query);
         else scanFlat(query);
@@ -336,13 +393,36 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         if (selectedFile != null && results.stream().noneMatch(f -> Objects.equals(f.getName(), selectedFile.getName())))
             selectSound(null);
 
+        if (scrollContainer != null && pendingScrollTarget == null) scrollContainer.scrollTo(savedScrollPos);
+        SoundboardAudioSystem.scanDurations();
+    }
+
+    /** Sanitizes file names then does a full rescan. Called only from the Refresh button. */
+    private void refreshSounds() {
+        sanitizeAndRenameSoundFiles();
+        scanSounds();
+    }
+
+    /**
+     * Re-sorts and rebuilds the visible list without hitting the filesystem.
+     * Used after toggling a favourite so we avoid a costly full rescan.
+     */
+    private void rebuildListFromResults() {
+        results.sort(sortComparator());
+        resultsList.clearChildren();
+        rowWidgets.clear();
+        rowLayouts.clear();
+        resultsMap.clear();
+        if (currentFolder != null) resultsList.child(buildBackRow());
+        // Re-add folder rows if in subfolder mode at root – skip, currentFolder handles it
+        results.forEach(f -> { resultsMap.put(f.getName(), f); resultsList.child(buildRow(f)); });
         if (scrollContainer != null) scrollContainer.scrollTo(savedScrollPos);
-        SoundboardAudioSystem.preloadAll();
     }
 
     private void scanFlat(String query) {
         File dir = currentFolder != null ? currentFolder : OpenSoundboardClient.soundDir;
         if (currentFolder != null) resultsList.child(buildBackRow());
+
         File[] files = dir.listFiles((d, n) -> n.endsWith(".mp3"));
         if (files == null) files = new File[0];
         appendSorted(files, query);
@@ -372,25 +452,31 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         }
     }
 
+    /** Filter, sort, and add a set of files to results + resultsList. */
     private void appendSorted(File[] files, String query) {
         List<File> filtered = Arrays.stream(files)
                 .filter(f -> f.getName().toLowerCase().contains(query))
                 .sorted(sortComparator())
                 .collect(Collectors.toList());
         results.addAll(filtered);
-        filtered.forEach(f -> resultsList.child(buildRow(f)));
+        filtered.forEach(f -> { resultsMap.put(f.getName(), f); resultsList.child(buildRow(f)); });
     }
+
+    // ---------------------------------------------------------------
+    // Row builders
+    // ---------------------------------------------------------------
 
     private FlowLayout buildFolderRow(File dir) {
         var row = Containers.horizontalFlow(Sizing.fill(), Sizing.content());
         row.gap(3).padding(Insets.of(1)).verticalAlignment(VerticalAlignment.CENTER);
         row.surface(Surface.flat(0x33FFFF00));
 
-        String label = GuiTools.trimName(client.textRenderer, "\uD83D\uDCC1 " + dir.getName(), listWidth - FAV_WIDTH - PLAY_WIDTH - 20);
+        String label = GuiTools.trimName(client.textRenderer,
+                "📁 " + dir.getName(), listWidth - FAV_WIDTH - PLAY_WIDTH - 20);
         var nameLabel = Components.label(Text.literal(label).formatted(Formatting.YELLOW));
         nameLabel.horizontalTextAlignment(HorizontalAlignment.LEFT).horizontalSizing(Sizing.expand());
 
-        var openBtn = Components.button(Text.literal("\u25B6"), b -> {});
+        var openBtn = Components.button(Text.literal("▶"), b -> {});
         openBtn.sizing(Sizing.fixed(PLAY_WIDTH), Sizing.content());
         openBtn.active(false);
 
@@ -412,15 +498,15 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         row.gap(3).padding(Insets.of(1)).verticalAlignment(VerticalAlignment.CENTER);
         row.surface(Surface.flat(0x33FFFFFF));
 
-        var icon = Components.button(Text.literal("\u2190"), b -> {});
-        icon.sizing(Sizing.fixed(PLAY_WIDTH), Sizing.content());
-        icon.active(false);
+        var backBtnIcon = Components.button(Text.literal("←"), b -> {});
+        backBtnIcon.sizing(Sizing.fixed(PLAY_WIDTH), Sizing.content());
+        backBtnIcon.active(false);
 
         var nameLabel = Components.label(
-                Text.literal("\u2190 " + (currentFolder != null ? currentFolder.getName() : "")).formatted(Formatting.GRAY));
+                Text.literal("← " + (currentFolder != null ? currentFolder.getName() : "")).formatted(Formatting.GRAY));
         nameLabel.horizontalTextAlignment(HorizontalAlignment.LEFT).horizontalSizing(Sizing.expand());
 
-        row.child(icon);
+        row.child(backBtnIcon);
         row.child(Containers.horizontalFlow(Sizing.fixed(FAV_WIDTH), Sizing.content()));
         row.child(nameLabel);
         row.mouseDown().subscribe((mx, my, btn) -> {
@@ -443,7 +529,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         var favBtn = Components.button(GuiTools.favoriteLabel(data.isFavorite()), b -> {
             data.setFavorite(!data.isFavorite());
             SoundboardConfig.save();
-            scanSounds();
+            rebuildListFromResults();
         });
         favBtn.tooltip(Text.translatable("gui.opensoundboard.favorite"));
         favBtn.sizing(Sizing.fixed(FAV_WIDTH), Sizing.content());
@@ -452,19 +538,25 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         nameLabel.horizontalTextAlignment(HorizontalAlignment.LEFT);
 
         var playBtn = Components.button(Text.translatable("gui.opensoundboard.play"), b -> {
-            togglePlay(file); refreshListVisuals();
+            selectSound(file);
+            togglePlay(file);
+            refreshListVisuals();
         });
         playBtn.sizing(Sizing.fixed(PLAY_WIDTH), Sizing.content());
 
         row.child(playBtn).child(favBtn).child(nameLabel);
         rowWidgets.put(key, new RowWidgets(favBtn, nameLabel, playBtn));
+        rowLayouts.put(key, row);
 
         row.mouseDown().subscribe((mouseX, mouseY, btn) -> {
             selectSound(file);
             long now = System.currentTimeMillis();
             if (lastClickedFile != null && key.equals(lastClickedFile.getName()) && (now - lastClickMs) <= DOUBLE_CLICK_WINDOW_MS) {
-                togglePlay(file); lastClickedFile = null; lastClickMs = 0;
-            } else { lastClickedFile = file; lastClickMs = now; }
+                togglePlay(file);
+                lastClickedFile = null; lastClickMs = 0;
+            } else {
+                lastClickedFile = file; lastClickMs = now;
+            }
             refreshListVisuals();
             return true;
         });
@@ -472,6 +564,10 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         updateRowVisuals(file, row);
         return row;
     }
+
+    // ---------------------------------------------------------------
+    // Playback helpers
+    // ---------------------------------------------------------------
 
     private void togglePlay(File file) {
         String key = file.getName();
@@ -484,6 +580,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         boolean isSelected = selectedFile != null && key.equals(selectedFile.getName());
         boolean isPlaying  = SoundboardAudioSystem.isPlaying(key);
         row.surface(isSelected ? Surface.flat(0x33FFFFFF) : Surface.BLANK);
+
         RowWidgets w = rowWidgets.get(key);
         if (w == null) return;
         w.favBtn().setMessage(GuiTools.favoriteLabel(SoundboardConfig.get(key).isFavorite()));
@@ -496,7 +593,9 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void selectSound(File file) {
-        selectedFile = file; isBinding = false;
+        selectedFile = file;
+        isBinding    = false;
+
         if (file == null) {
             detailLabel.text(Text.translatable("gui.opensoundboard.select_hint").formatted(Formatting.GRAY));
             detailLocalSlider.active(false);
@@ -509,21 +608,26 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         } else {
             var data = SoundboardConfig.get(file.getName());
             detailLabel.text(Text.translatable("gui.opensoundboard.settings_for", file.getName()).formatted(Formatting.YELLOW));
-            detailLocalSlider.active(true); detailLocalSlider.value(data.getLocalVolume());
+            detailLocalSlider.active(true);
+            detailLocalSlider.value(data.getLocalVolume());
             if (!SoundboardConfig.data.isSyncAudio() && detailPlayerSlider != null) {
-                detailPlayerSlider.active(true); detailPlayerSlider.value(data.getPlayerVolume());
+                detailPlayerSlider.active(true);
+                detailPlayerSlider.value(data.getPlayerVolume());
             }
-            detailBindBtn.active(true); updateBindButtonText(data.getKeybind());
+            detailBindBtn.active(true);
+            updateBindButtonText(data.getKeybind());
+
             boolean playing = SoundboardAudioSystem.isPlaying(file.getName());
             setPlaybackControlsActive(playing);
             if (playing) {
                 timelineSlider.value(SoundboardAudioSystem.getProgress(file.getName()));
-                if (!timeField.isFocused()) timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
+                if (!timeField.isFocused())
+                    timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
             } else {
                 timelineSlider.value(0);
                 if (!timeField.isFocused()) timeField.setText("0:00.0");
             }
-            pauseBtn.setMessage(SoundboardAudioSystem.isPaused(file.getName()) ? Text.literal("\u25B6") : Text.literal("\u23F8"));
+            pauseBtn.setMessage(SoundboardAudioSystem.isPaused(file.getName()) ? Text.literal("▶") : Text.literal("⏸"));
         }
         refreshListVisuals();
     }
@@ -535,7 +639,8 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         if (SoundboardConfig.data.isSyncAudio()) {
             float vol = local != null ? local.floatValue() : (player != null ? player.floatValue() : 1f);
             for (var entry : SoundboardConfig.sounds().entrySet()) {
-                entry.getValue().setLocalVolume(vol); entry.getValue().setPlayerVolume(vol);
+                entry.getValue().setLocalVolume(vol);
+                entry.getValue().setPlayerVolume(vol);
                 SoundboardAudioSystem.setVolume(entry.getKey(), vol, vol);
             }
             data.setLocalVolume(vol); data.setPlayerVolume(vol);
@@ -552,6 +657,10 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         detailBindBtn.setMessage(GuiTools.keyBindLabel(keyBind));
     }
 
+    // ---------------------------------------------------------------
+    // Input
+    // ---------------------------------------------------------------
+
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
         boolean handled = super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
@@ -567,9 +676,11 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+
         if (queryField.isFocused() && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
             if (!results.isEmpty()) { var f = results.get(0); selectSound(f); togglePlay(f); refreshListVisuals(); return true; }
         }
+
         if (isBinding && selectedFile != null) {
             var data = SoundboardConfig.get(selectedFile.getName());
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -580,6 +691,7 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             detailBindBtn.setMessage(GuiTools.keyBindLabel(pendingKeybind).copy().formatted(Formatting.YELLOW));
             return true;
         }
+
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) { close(); return true; }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
@@ -594,6 +706,10 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         return super.keyReleased(keyCode, scanCode, modifiers);
     }
 
+    // ---------------------------------------------------------------
+    // Tick
+    // ---------------------------------------------------------------
+
     @Override
     public void tick() {
         super.tick();
@@ -603,15 +719,20 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void refreshDetailsUiState() {
-        loopBtn.setMessage(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()));
         var file = selectedFile;
+        loopBtn.setMessage(GuiTools.loopLabel(SoundboardConfig.data.isLoopAll()));
         if (file == null) { setPlaybackControlsActive(false); return; }
+
         boolean playing = SoundboardAudioSystem.isPlaying(file.getName());
         setPlaybackControlsActive(playing);
         if (playing) {
-            if (!timelineSlider.isFocused()) { float p = SoundboardAudioSystem.getProgress(file.getName()); if (p >= 0) timelineSlider.value(p); }
-            if (!timeField.isFocused()) timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
-            pauseBtn.setMessage(SoundboardAudioSystem.isPaused(file.getName()) ? Text.literal("\u25B6") : Text.literal("\u23F8"));
+            if (!timelineSlider.isFocused()) {
+                float p = SoundboardAudioSystem.getProgress(file.getName());
+                if (p >= 0) timelineSlider.value(p);
+            }
+            if (!timeField.isFocused())
+                timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(file.getName())));
+            pauseBtn.setMessage(SoundboardAudioSystem.isPaused(file.getName()) ? Text.literal("▶") : Text.literal("⏸"));
         } else {
             if (!timelineSlider.isFocused()) timelineSlider.value(0);
             if (!timeField.isFocused()) timeField.setText("0:00.0");
@@ -619,12 +740,25 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private void refreshListVisuals() {
-        for (var child : resultsList.children()) {
-            if (!(child instanceof FlowLayout row) || row.id() == null) continue;
-            results.stream().filter(f -> Objects.equals(f.getName(), row.id())).findFirst()
-                    .ifPresent(f -> updateRowVisuals(f, row));
+        if (scrollContainer == null) return;
+        int viewTop    = scrollContainer.y();
+        int viewBottom = viewTop + scrollContainer.height();
+
+        for (var entry : rowLayouts.entrySet()) {
+            FlowLayout row = entry.getValue();
+            int rowTop    = row.y();
+            int rowBottom = rowTop + row.height();
+            if (rowBottom < viewTop || rowTop > viewBottom) continue;
+
+            final String key = entry.getKey();
+            File f = resultsMap.get(key);
+            if (f != null) updateRowVisuals(f, row);
         }
     }
+
+    // ---------------------------------------------------------------
+    // File sanitize
+    // ---------------------------------------------------------------
 
     private void sanitizeAndRenameSoundFiles() {
         File[] allFiles = OpenSoundboardClient.soundDir.listFiles((dir, name) -> name.endsWith(".mp3"));
@@ -637,12 +771,15 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
             if (sanitized.isBlank()) sanitized = "track";
             String newName = sanitized + ".mp3";
             if (newName.equals(oldName)) continue;
+
             File target = new File(OpenSoundboardClient.soundDir, newName);
             for (int i = 2; target.exists(); i++)
                 target = new File(OpenSoundboardClient.soundDir, sanitized + " (" + i + ").mp3");
+
             if (!file.renameTo(target)) continue;
-            SoundboardAudioSystem.invalidateCache(oldName);
-            SoundboardAudioSystem.preloadFile(target);
+
+            SoundboardAudioSystem.invalidateDurationCache(oldName);
+            SoundboardAudioSystem.scanFile(target);
             if (selectedFile != null && selectedFile.getName().equals(oldName)) selectedFile = target;
             if (SoundboardConfig.data != null) {
                 var old = SoundboardConfig.sounds().remove(oldName);
@@ -652,3 +789,4 @@ public class SoundboardScreen extends BaseOwoScreen<FlowLayout> {
         if (changed) SoundboardConfig.save();
     }
 }
+

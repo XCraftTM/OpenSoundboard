@@ -113,6 +113,13 @@
   "message.opensoundboard.youtube.exit_code": "yt-dlp wurde mit einem Fehler beendet.",
 
   "message.opensoundboard.start_point_set": "Startpunkt gesetzt für %s",
+  "message.opensoundboard.rename_failed": "Umbenennen fehlgeschlagen: %s",
+  "message.opensoundboard.delete_failed": "Löschen fehlgeschlagen: %s",
+
+  "gui.opensoundboard.rename": "Umbenennen",
+  "gui.opensoundboard.rename_title": "Sound umbenennen",
+  "gui.opensoundboard.rename_confirm": "Umbenennen",
+  "gui.opensoundboard.delete": "Löschen",
 
   "key.opensoundboard.wheel": "Sound-Rad",
 

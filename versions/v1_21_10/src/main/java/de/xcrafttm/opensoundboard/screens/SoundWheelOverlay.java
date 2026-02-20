@@ -98,12 +98,21 @@ public class SoundWheelOverlay extends BaseOwoScreen<FlowLayout> {
         // Center indicator
         String pageText = allSounds.isEmpty()
                 ? Text.translatable("gui.opensoundboard.wheel.empty").getString()
-                : currentFolder != null
-                    ? currentFolder.getName()
-                    : Text.translatable("gui.opensoundboard.wheel.page",
-                        String.valueOf(page + 1), String.valueOf(totalPages())).getString();
+                : Text.translatable("gui.opensoundboard.wheel.page",
+                    String.valueOf(page + 1), String.valueOf(totalPages())).getString();
 
         int centerW = 120;
+
+        // Folder label above center button (only visible when inside a folder)
+        if (currentFolder != null) {
+            var folderLabel = Components.label(
+                    Text.literal(currentFolder.getName()).formatted(Formatting.YELLOW));
+            folderLabel.horizontalTextAlignment(HorizontalAlignment.CENTER);
+            folderLabel.sizing(Sizing.fixed(centerW), Sizing.content());
+            folderLabel.positioning(Positioning.absolute(cx - centerW / 2, cy - BUTTON_H / 2 - 14));
+            root.child(folderLabel);
+        }
+
         ButtonComponent centerBtn = Components.button(Text.literal(pageText), b -> {});
         centerBtn.sizing(Sizing.fixed(centerW), Sizing.fixed(BUTTON_H));
         centerBtn.positioning(Positioning.absolute(cx - centerW / 2, cy - BUTTON_H / 2));
