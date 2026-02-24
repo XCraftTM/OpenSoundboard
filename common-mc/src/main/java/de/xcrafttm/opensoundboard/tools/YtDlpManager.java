@@ -33,6 +33,11 @@ public final class YtDlpManager {
             ? "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip"
             : "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl-shared.tar.xz";
 
+    private static final String DENO_NAME = IS_WINDOWS ? "deno.exe" : "deno";
+    private static final String DENO_URL = IS_WINDOWS
+            ? "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
+            : "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip";
+
     private static File libDir() {
         File dir = new File(new File(FabricLoader.getInstance().getConfigDir().toFile(), "opensoundboard"), "lib");
         if (!dir.exists()) {
@@ -50,6 +55,10 @@ public final class YtDlpManager {
         return new File(libDir(), FFMPEG_NAME);
     }
 
+    private static File denoFile() {
+        return new File(libDir(), DENO_NAME);
+    }
+
     public static File soundDir() {
         File dir = new File(FabricLoader.getInstance().getGameDir().toFile(), "opensoundboard");
         if (!dir.exists()) {
@@ -60,15 +69,23 @@ public final class YtDlpManager {
     }
 
     public static synchronized boolean ensureBinariesPresent() {
-        return ensureYtDlpPresent() && ensureFfmpegPresent();
+        return ensureBinariesPresent(null);
+    }
+
+    public static synchronized boolean ensureBinariesPresent(Consumer<String> onProgress) {
+        return ensureYtDlpPresent(onProgress) && ensureFfmpegPresent(onProgress) && ensureDenoPresent(onProgress);
     }
 
     public static synchronized boolean ensureYtDlpPresent() {
+        return ensureYtDlpPresent(null);
+    }
+
+    public static synchronized boolean ensureYtDlpPresent(Consumer<String> onProgress) {
         File bin = ytDlpFile();
         if (bin.exists() && bin.canExecute()) return true;
 
         try {
-            downloadBinary(YT_DLP_URL, bin);
+            downloadBinary(YT_DLP_URL, bin, onProgress);
             //noinspection ResultOfMethodCallIgnored
             bin.setExecutable(true, false);
             return true;
@@ -79,13 +96,17 @@ public final class YtDlpManager {
     }
 
     public static synchronized boolean ensureFfmpegPresent() {
+        return ensureFfmpegPresent(null);
+    }
+
+    public static synchronized boolean ensureFfmpegPresent(Consumer<String> onProgress) {
         File bin = ffmpegFile();
         if (bin.exists() && bin.canExecute()) return true;
 
         try {
             String archiveName = IS_WINDOWS ? "ffmpeg.zip" : "ffmpeg.tar.xz";
             File archiveFile = new File(libDir(), archiveName);
-            downloadBinary(FFMPEG_URL, archiveFile);
+            downloadBinary(FFMPEG_URL, archiveFile, onProgress);
 
             if (IS_WINDOWS) {
                 extractZipFlattenBin(archiveFile, libDir());
@@ -105,12 +126,42 @@ public final class YtDlpManager {
         }
     }
 
-    private static void downloadBinary(String urlStr, File dest) throws Exception {
+    public static synchronized boolean ensureDenoPresent() {
+        return ensureDenoPresent(null);
+    }
+
+    public static synchronized boolean ensureDenoPresent(Consumer<String> onProgress) {
+        File bin = denoFile();
+        if (bin.exists() && bin.canExecute()) return true;
+
+        try {
+            File archiveFile = new File(libDir(), "deno.zip");
+            downloadBinary(DENO_URL, archiveFile, onProgress);
+
+            // Deno ZIP contains the binary at the archive root (e.g. "deno.exe" / "deno")
+            extractZipFlatFile(archiveFile, DENO_NAME, bin);
+
+            //noinspection ResultOfMethodCallIgnored
+            archiveFile.delete();
+            //noinspection ResultOfMethodCallIgnored
+            bin.setExecutable(true, false);
+            return true;
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return false;
+        }
+    }
+
+    private static void downloadBinary(String urlStr, File dest, Consumer<String> onProgress) throws Exception {
+        String fileName = dest.getName();
+        log(onProgress, "[OpenSoundboard] Downloading " + fileName + " ...");
+        log(onProgress, "[OpenSoundboard]   from: " + urlStr);
+
         URI uri = URI.create(urlStr);
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
         conn.setInstanceFollowRedirects(true);
-        conn.setConnectTimeout(15_000);
-        conn.setReadTimeout(30_000);
+        conn.setConnectTimeout(30_000);
+        conn.setReadTimeout(500_000);
         conn.setRequestProperty("User-Agent", "OpenSoundboard-Downloader");
 
         conn.connect();
@@ -120,12 +171,59 @@ public final class YtDlpManager {
             throw new RuntimeException("Failed to download from " + urlStr + ": HTTP " + code);
         }
 
-        try (InputStream input = new BufferedInputStream(conn.getInputStream());
+        long totalBytes = conn.getContentLengthLong(); // -1 if unknown
+
+        try (InputStream raw = conn.getInputStream();
              OutputStream output = Files.newOutputStream(dest.toPath())) {
-            input.transferTo(output);
+
+            byte[] buf = new byte[8192];
+            long downloaded = 0;
+            int lastReportedPercent = -1;
+            int read;
+
+            while ((read = raw.read(buf)) != -1) {
+                output.write(buf, 0, read);
+                downloaded += read;
+
+                if (totalBytes > 0) {
+                    int percent = (int) (downloaded * 100 / totalBytes);
+                    // Report every 10 %
+                    int bucket = percent / 10;
+                    if (bucket * 10 > lastReportedPercent) {
+                        lastReportedPercent = bucket * 10;
+                        log(onProgress, String.format("[OpenSoundboard]   %s  %d%% (%s / %s)",
+                                fileName,
+                                lastReportedPercent,
+                                humanReadableBytes(downloaded),
+                                humanReadableBytes(totalBytes)));
+                    }
+                } else {
+                    // Unknown size – report every 5 MB
+                    long prevMb = (downloaded - read) / (5 * 1024 * 1024);
+                    long currMb = downloaded / (5 * 1024 * 1024);
+                    if (currMb > prevMb) {
+                        log(onProgress, String.format("[OpenSoundboard]   %s  downloaded %s...",
+                                fileName, humanReadableBytes(downloaded)));
+                    }
+                }
+            }
+
+            log(onProgress, String.format("[OpenSoundboard]   %s  done (%s)", fileName, humanReadableBytes(downloaded)));
         } finally {
             conn.disconnect();
         }
+    }
+
+    private static void log(Consumer<String> onProgress, String message) {
+        System.out.println(message);
+        if (onProgress != null) onProgress.accept(message);
+    }
+
+    private static String humanReadableBytes(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        if (bytes < 1024 * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
+        return String.format("%.2f GB", bytes / (1024.0 * 1024 * 1024));
     }
 
     private static void extractZipFlattenBin(File zipFile, File destDir) throws IOException {
@@ -148,6 +246,31 @@ public final class YtDlpManager {
             });
         } catch (UncheckedIOException e) {
             throw e.getCause();
+        }
+    }
+
+    /**
+     * Extracts a single named entry from the root of a ZIP file to the given destination file.
+     * Used for Deno, whose ZIP places the binary directly at the archive root.
+     */
+    private static void extractZipFlatFile(File zipFile, String entryName, File dest) throws IOException {
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(zipFile)) {
+            java.util.zip.ZipEntry entry = zip.getEntry(entryName);
+            if (entry == null) {
+                // Fallback: find any entry whose simple filename matches
+                entry = zip.stream()
+                        .filter(e -> !e.isDirectory())
+                        .filter(e -> {
+                            String n = e.getName();
+                            return n.equals(entryName) || n.endsWith("/" + entryName);
+                        })
+                        .findFirst()
+                        .orElseThrow(() -> new IOException("Entry '" + entryName + "' not found in " + zipFile.getName()));
+            }
+            try (InputStream in = zip.getInputStream(entry);
+                 OutputStream out = Files.newOutputStream(dest.toPath())) {
+                in.transferTo(out);
+            }
         }
     }
 
@@ -198,7 +321,7 @@ public final class YtDlpManager {
     public static DownloadResult downloadUrlIntoSoundDir(String url, boolean audioOnly, Consumer<String> onProgress, Consumer<Process> onProcessStart) {
         if (url == null || url.isBlank()) return new DownloadResult(false, "message.opensoundboard.empty_url");
 
-        if (!ensureBinariesPresent()) {
+        if (!ensureBinariesPresent(onProgress)) {
             return new DownloadResult(false, "message.opensoundboard.binaries_missing");
         }
 
@@ -222,6 +345,8 @@ public final class YtDlpManager {
         if (audioOnly) {
             args.addAll(java.util.List.of("-x", "--audio-format", "mp3"));
         }
+
+        args.addAll(java.util.List.of("--js-runtimes", "deno:"+denoFile().getAbsolutePath()));
 
         args.addAll(java.util.List.of("-o", outputPattern, url));
 
