@@ -1,10 +1,13 @@
 package de.xcrafttm.opensoundboard;
 
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
+import de.xcrafttm.opensoundboard.screens.DemoScreen;
 import de.xcrafttm.opensoundboard.tools.KeybindHandler;
+import de.xcrafttm.opensoundboard.tools.McCompat;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
+import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +28,9 @@ public class OpenSoundboardClient implements ClientModInitializer {
 
     public static final File soundDir = new File(FabricLoader.getInstance().getGameDir().toFile(), "opensoundboard");
 
+    // Temporary Phase 3 preview hook (edge-detected) — remove once the real keybind lands in Phase 4.
+    private static boolean previewKeyWasDown = false;
+
     @Override
     public void onInitializeClient() {
         if (!soundDir.exists()) {
@@ -33,7 +39,17 @@ public class OpenSoundboardClient implements ClientModInitializer {
 
         SoundboardConfig.load();
 
-        ClientTickEvents.END_CLIENT_TICK.register(client -> KeybindHandler.tick(client, soundDir));
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            KeybindHandler.tick(client, soundDir);
+
+            // Preview: press U with no screen open to show the custom UI demo.
+            boolean uDown = client.screen == null
+                    && GLFW.glfwGetKey(McCompat.windowHandle(client), GLFW.GLFW_KEY_U) == GLFW.GLFW_PRESS;
+            if (uDown && !previewKeyWasDown) {
+                client.setScreen(new DemoScreen());
+            }
+            previewKeyWasDown = uDown;
+        });
 
         LOGGER.info("[OpenSoundboard] client initialized");
     }

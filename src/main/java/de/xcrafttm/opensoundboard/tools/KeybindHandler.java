@@ -10,8 +10,7 @@ import java.util.Set;
 
 /**
  * Polls raw GLFW state for the per-sound keybinds configured by the user and triggers
- * playback. Mojang-mapped; the only cross-version difference is the window-handle accessor
- * ({@code Window.getWindow()} on 1.21.1, renamed to {@code Window.handle()} afterwards).
+ * playback. Fully Mojang-mapped; the one window-handle rename is hidden in {@link McCompat}.
  */
 public final class KeybindHandler {
 
@@ -26,11 +25,7 @@ public final class KeybindHandler {
             return;
         }
 
-        //? if >=1.21.2 {
-        long window = client.getWindow().handle();
-        //?} else {
-        /*long window = client.getWindow().getWindow();
-        *///?}
+        long window = McCompat.windowHandle(client);
 
         for (var entry : SoundboardConfig.sounds().entrySet()) {
             SoundboardConfig.KeyBind keybind = entry.getValue().getKeybind();
