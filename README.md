@@ -81,21 +81,21 @@
 The project uses [Stonecutter](https://stonecutter.kikugie.dev/) to build every supported Minecraft version from a single source tree.
 
 ```bash
-# Build all supported versions at once
-./gradlew chiseledBuild
+# Build every supported version and collect the jars into build/jars/
+JAVA_HOME=<jdk-25> ./gradlew buildAllJars
 ```
 
-Each version's JAR is written to `versions/<version>/build/libs/`.
+The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.3.0+mc26.1.2.jar`. (Each is also left in `versions/<version>/build/libs/`.)
 
-To work on a single version, switch the active version first:
+To work on a single version, switch the active version first, then build or run just that node:
 
 ```bash
-./gradlew "Set active project to 26.1.2"   # pick the active version
-./gradlew build                            # build just that version
-./gradlew client_26_1_2                    # switch + launch its client
+./gradlew stonecutterSwitchTo26.1.2   # pick the active version
+./gradlew :26.1.2:build               # build just that node -> versions/26.1.2/build/libs/
+./gradlew client_26_1_2               # switch + launch its client
 ```
 
-> Minecraft 26.x builds require the Gradle daemon to run on Java 25 (set `JAVA_HOME` accordingly); 1.21.x versions use Java 21.
+> Minecraft 26.x builds require the Gradle daemon to run on Java 25 (set `JAVA_HOME` accordingly); 1.21.x versions target Java 21 but build fine on a Java 25 daemon too. A plain `./gradlew build` won't work — it tries to build every version as the active one, which breaks across the 1.21.x/26.x boundary.
 
 ## Credits
 
