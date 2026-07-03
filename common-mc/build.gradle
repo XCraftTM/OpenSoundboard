@@ -15,6 +15,17 @@ java {
     }
 }
 
+// Yarn-mapped shared code (KeybindHandler, SoundboardAudioSystem) lives in a
+// separate source root so the Mojang-mapped 26.1 module can supply its own
+// copies instead. Yarn version modules add this root too; v26_1 does not.
+sourceSets {
+    main {
+        java {
+            srcDir 'src/mc-yarn/java'
+        }
+    }
+}
+
 def baselineMinecraftVersion = project.findProperty('baseline_minecraft_version') ?: project.rootProject.findProperty('baseline_minecraft_version') ?: '1.21.11'
 def baselineYarnMappings = project.findProperty('baseline_yarn_mappings') ?: project.rootProject.findProperty('baseline_yarn_mappings') ?: '1.21.11+build.4'
 

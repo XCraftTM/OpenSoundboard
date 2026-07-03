@@ -1,10 +1,10 @@
 plugins {
-    id 'fabric-loom'
+    id 'net.fabricmc.fabric-loom'
     id 'maven-publish'
 }
 
 group = project.maven_group
-version = project.mod_version + "+mc1.21.11"
+version = project.mod_version + "+mc26.1"
 
 base {
     archivesName = project.archives_base_name
@@ -12,24 +12,23 @@ base {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modImplementation "com.terraformersmc:modmenu:${project.modmenu_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "com.terraformersmc:modmenu:${project.modmenu_version}"
     implementation "de.maxhenkel.voicechat:voicechat-api:${project.voicechat_api_version}"
-    modRuntimeOnly "maven.modrinth:simple-voice-chat:fabric-${project.voicechat_version}"
+    runtimeOnly "maven.modrinth:simple-voice-chat:fabric-${project.voicechat_version}"
 
     // For 1.21.11, owo is published on Modrinth maven under group maven.modrinth
-    modImplementation "maven.modrinth:owo-lib:${project.owo_version}"
+    implementation "maven.modrinth:owo-lib:${project.owo_version}"
 
     // owo-lib runtime deps (pinned to what owo-lib expects)
-    modImplementation "io.wispforest:endec:${project.endec_version}"
-    modImplementation "io.wispforest.endec:netty:${project.endec_netty_version}"
-    modImplementation "io.wispforest.endec:gson:${project.endec_gson_version}"
-    modImplementation "io.wispforest.endec:jankson:${project.endec_jankson_version}"
+    implementation "io.wispforest:endec:${project.endec_version}"
+    implementation "io.wispforest.endec:netty:${project.endec_netty_version}"
+    implementation "io.wispforest.endec:gson:${project.endec_gson_version}"
+    implementation "io.wispforest.endec:jankson:${project.endec_jankson_version}"
     // owo also uses Jankson at runtime
-    modImplementation 'blue.endless:jankson:1.2.3'
+    implementation 'blue.endless:jankson:1.2.3'
 
     api project(':common')
 }
@@ -39,7 +38,6 @@ sourceSets {
     main {
         java {
             srcDir project(':common-mc').file('src/main/java')
-            srcDir project(':common-mc').file('src/mc-yarn/java')
         }
         resources {
             // keep this module's own resources (fabric.mod.json, etc.)
@@ -90,5 +88,8 @@ jar {
 }
 
 java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
     withSourcesJar()
 }

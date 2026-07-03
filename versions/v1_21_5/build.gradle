@@ -30,6 +30,7 @@ sourceSets {
     main {
         java {
             srcDir project(':common-mc').file('src/main/java')
+            srcDir project(':common-mc').file('src/mc-yarn/java')
         }
         resources {
             srcDir project(':common').file('src/main/resources')
@@ -73,5 +74,6 @@ jar {
 }
 
 java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
     withSourcesJar()
 }
