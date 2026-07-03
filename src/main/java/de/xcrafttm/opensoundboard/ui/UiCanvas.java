@@ -48,6 +48,51 @@ public final class UiCanvas {
         g.fill(x + w - 1, y + 1, x + w, y + h - 1, argb);
     }
 
+    /** Filled rectangle with slightly rounded corners (default {@link Theme#RADIUS}). */
+    public void fillRoundRect(int x, int y, int w, int h, int argb) {
+        fillRoundRect(x, y, w, h, Theme.RADIUS, argb);
+    }
+
+    public void fillRoundRect(int x, int y, int w, int h, int r, int argb) {
+        r = Math.min(r, Math.min(w, h) / 2);
+        if (r <= 0) {
+            fillRect(x, y, w, h, argb);
+            return;
+        }
+        g.fill(x, y + r, x + w, y + h - r, argb);
+        for (int i = 0; i < r; i++) {
+            int dy = r - 1 - i;
+            int inset = r - (int) Math.floor(Math.sqrt((double) (r * r - dy * dy)));
+            g.fill(x + inset, y + i, x + w - inset, y + i + 1, argb);
+            g.fill(x + inset, y + h - 1 - i, x + w - inset, y + h - i, argb);
+        }
+    }
+
+    /** 1px outline matching {@link #fillRoundRect}. */
+    public void roundBorder(int x, int y, int w, int h, int argb) {
+        roundBorder(x, y, w, h, Theme.RADIUS, argb);
+    }
+
+    public void roundBorder(int x, int y, int w, int h, int r, int argb) {
+        r = Math.min(r, Math.min(w, h) / 2);
+        if (r <= 0) {
+            border(x, y, w, h, argb);
+            return;
+        }
+        g.fill(x + r, y, x + w - r, y + 1, argb);
+        g.fill(x + r, y + h - 1, x + w - r, y + h, argb);
+        g.fill(x, y + r, x + 1, y + h - r, argb);
+        g.fill(x + w - 1, y + r, x + w, y + h - r, argb);
+        for (int i = 0; i < r; i++) {
+            int dy = r - 1 - i;
+            int inset = r - (int) Math.floor(Math.sqrt((double) (r * r - dy * dy)));
+            g.fill(x + inset, y + i, x + inset + 1, y + i + 1, argb);
+            g.fill(x + w - inset - 1, y + i, x + w - inset, y + i + 1, argb);
+            g.fill(x + inset, y + h - 1 - i, x + inset + 1, y + h - i, argb);
+            g.fill(x + w - inset - 1, y + h - 1 - i, x + w - inset, y + h - i, argb);
+        }
+    }
+
     public void text(String s, int x, int y, int color) {
         //? if >=26 {
         /*g.text(font, s, x, y, color, false);

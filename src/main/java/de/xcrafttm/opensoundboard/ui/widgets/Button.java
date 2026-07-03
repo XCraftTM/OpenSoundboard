@@ -34,10 +34,10 @@ public class Button extends Widget {
     public void draw(UiCanvas c) {
         boolean hover = active && c.hovered(x, y, w, h);
         if (primary) {
-            c.fillRect(x, y, w, h, active ? (hover ? Theme.ACCENT_HOVER : Theme.ACCENT) : Theme.ROW);
+            c.fillRoundRect(x, y, w, h, active ? (hover ? Theme.ACCENT_HOVER : Theme.ACCENT) : Theme.ROW);
         } else {
-            c.fillRect(x, y, w, h, hover ? Theme.ROW_HOVER : Theme.ROW);
-            c.border(x, y, w, h, hover ? Theme.BORDER_STRONG : Theme.BORDER);
+            c.fillRoundRect(x, y, w, h, hover ? Theme.ROW_HOVER : Theme.ROW);
+            c.roundBorder(x, y, w, h, hover ? Theme.BORDER_STRONG : Theme.BORDER);
         }
         int textColor = !active ? Theme.TEXT_MUTED : (primary ? Theme.TEXT_ON_ACCENT : Theme.TEXT);
         c.centeredText(label, x + w / 2, y + (h - 8) / 2, textColor);

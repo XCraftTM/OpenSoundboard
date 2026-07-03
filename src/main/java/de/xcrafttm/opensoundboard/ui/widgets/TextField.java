@@ -3,19 +3,27 @@ package de.xcrafttm.opensoundboard.ui.widgets;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
 import de.xcrafttm.opensoundboard.ui.Widget;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
 
-/** Single-line editable text field with a blinking caret. Focus is managed by the screen. */
+/**
+ * Single-line editable text field with a caret, selection (drag or shift+arrows), horizontal
+ * scroll, and clipboard support (Ctrl+A/C/X/V). Focus is managed by {@link de.xcrafttm.opensoundboard.ui.OsbScreen}.
+ * Uses only Mojang-mapped names that are identical across the whole span, so no conditionals.
+ */
 public class TextField extends Widget {
 
     private final StringBuilder text = new StringBuilder();
     private int cursor = 0;
+    private int selAnchor = 0;
     private String placeholder = "";
     private int maxLength = 256;
     private Consumer<String> onChange;
     private int blink = 0;
+    private int scrollPx = 0;
 
     public TextField placeholder(String placeholder) {
         this.placeholder = placeholder;
@@ -40,7 +48,7 @@ public class TextField extends Widget {
         text.setLength(0);
         text.append(s == null ? "" : s);
         if (text.length() > maxLength) text.setLength(maxLength);
-        cursor = text.length();
+        cursor = selAnchor = text.length();
     }
 
     @Override
@@ -49,44 +57,101 @@ public class TextField extends Widget {
     }
 
     @Override
+    public void setFocused(boolean f) {
+        super.setFocused(f);
+        if (!f) selAnchor = cursor;
+    }
+
+    @Override
     public void tick() {
         blink++;
     }
 
+    private static Font font() {
+        return Minecraft.getInstance().font;
+    }
+
+    private int selStart() {
+        return Math.min(cursor, selAnchor);
+    }
+
+    private int selEnd() {
+        return Math.max(cursor, selAnchor);
+    }
+
+    private boolean hasSelection() {
+        return cursor != selAnchor;
+    }
+
     @Override
     public void draw(UiCanvas c) {
-        c.fillRect(x, y, w, h, 0xFF0F0F14);
-        c.border(x, y, w, h, focused ? Theme.ACCENT : Theme.BORDER);
+        c.fillRoundRect(x, y, w, h, Theme.FIELD_BG);
+        c.roundBorder(x, y, w, h, focused ? Theme.ACCENT : Theme.BORDER);
+
+        Font f = font();
+        String s = text.toString();
         int tx = x + 5;
         int ty = y + (h - 8) / 2;
-        if (text.length() == 0 && !focused) {
+        int innerW = w - 10;
+
+        int cursorX = f.width(s.substring(0, cursor));
+        if (cursorX - scrollPx > innerW) scrollPx = cursorX - innerW;
+        if (cursorX - scrollPx < 0) scrollPx = cursorX;
+        int fullW = f.width(s);
+        if (fullW - scrollPx < innerW) scrollPx = Math.max(0, fullW - innerW);
+
+        c.pushScissor(x + 1, y + 1, w - 2, h - 2);
+        if (s.isEmpty() && !focused) {
             c.text(placeholder, tx, ty, Theme.TEXT_MUTED);
         } else {
-            String s = text.toString();
-            c.text(s, tx, ty, Theme.TEXT);
+            if (hasSelection()) {
+                int a = f.width(s.substring(0, selStart())) - scrollPx;
+                int b = f.width(s.substring(0, selEnd())) - scrollPx;
+                c.fillRect(tx + a, ty - 1, b - a, 10, Theme.SELECTION);
+            }
+            c.text(s, tx - scrollPx, ty, Theme.TEXT);
             if (focused && (blink / 6) % 2 == 0) {
-                int cx = tx + c.textWidth(s.substring(0, cursor));
-                c.fillRect(cx, ty - 1, 1, 10, Theme.TEXT);
+                c.fillRect(tx + cursorX - scrollPx, ty - 1, 1, 10, Theme.TEXT);
             }
         }
+        c.popScissor();
+    }
+
+    private int indexAtX(double mx) {
+        Font f = font();
+        String s = text.toString();
+        int rel = (int) mx - (x + 5) + scrollPx;
+        if (rel <= 0) return 0;
+        for (int i = 1; i <= s.length(); i++) {
+            int wPrev = f.width(s.substring(0, i - 1));
+            int wCur = f.width(s.substring(0, i));
+            if (wCur >= rel) {
+                return (rel - wPrev < wCur - rel) ? i - 1 : i;
+            }
+        }
+        return s.length();
     }
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        if (button == 0 && active) {
-            cursor = text.length();
-            blink = 0;
-            return true;
-        }
-        return false;
+        if (button != 0 || !active) return false;
+        cursor = selAnchor = indexAtX(mx);
+        blink = 0;
+        return true;
+    }
+
+    @Override
+    public void mouseDragged(double mx, double my, int button) {
+        if (button == 0 && active) cursor = indexAtX(mx);
     }
 
     @Override
     public boolean charTyped(char ch) {
-        if (!focused || text.length() >= maxLength) return false;
-        if (ch < 32 || ch == 127) return false;
+        if (!focused || ch < 32 || ch == 127) return false;
+        if (hasSelection()) deleteSelection();
+        if (text.length() >= maxLength) return true;
         text.insert(cursor, ch);
-        cursor++;
+        cursor = selAnchor = cursor + 1;
         fireChange();
         return true;
     }
@@ -94,42 +159,104 @@ public class TextField extends Widget {
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
         if (!focused) return false;
+        boolean ctrl = (mods & GLFW.GLFW_MOD_CONTROL) != 0;
+        boolean shift = (mods & GLFW.GLFW_MOD_SHIFT) != 0;
+
+        if (ctrl) {
+            switch (key) {
+                case GLFW.GLFW_KEY_A -> {
+                    selAnchor = 0;
+                    cursor = text.length();
+                    return true;
+                }
+                case GLFW.GLFW_KEY_C -> {
+                    if (hasSelection()) clipboard().setClipboard(text.substring(selStart(), selEnd()));
+                    return true;
+                }
+                case GLFW.GLFW_KEY_X -> {
+                    if (hasSelection()) {
+                        clipboard().setClipboard(text.substring(selStart(), selEnd()));
+                        deleteSelection();
+                        fireChange();
+                    }
+                    return true;
+                }
+                case GLFW.GLFW_KEY_V -> {
+                    paste(clipboard().getClipboard());
+                    return true;
+                }
+                default -> {
+                }
+            }
+        }
+
         switch (key) {
             case GLFW.GLFW_KEY_BACKSPACE -> {
-                if (cursor > 0) {
+                if (hasSelection()) deleteSelection();
+                else if (cursor > 0) {
                     text.deleteCharAt(cursor - 1);
                     cursor--;
-                    fireChange();
                 }
+                selAnchor = cursor;
+                fireChange();
                 return true;
             }
             case GLFW.GLFW_KEY_DELETE -> {
-                if (cursor < text.length()) {
-                    text.deleteCharAt(cursor);
-                    fireChange();
-                }
+                if (hasSelection()) deleteSelection();
+                else if (cursor < text.length()) text.deleteCharAt(cursor);
+                selAnchor = cursor;
+                fireChange();
                 return true;
             }
             case GLFW.GLFW_KEY_LEFT -> {
                 if (cursor > 0) cursor--;
+                if (!shift) selAnchor = cursor;
+                blink = 0;
                 return true;
             }
             case GLFW.GLFW_KEY_RIGHT -> {
                 if (cursor < text.length()) cursor++;
+                if (!shift) selAnchor = cursor;
+                blink = 0;
                 return true;
             }
             case GLFW.GLFW_KEY_HOME -> {
                 cursor = 0;
+                if (!shift) selAnchor = cursor;
                 return true;
             }
             case GLFW.GLFW_KEY_END -> {
                 cursor = text.length();
+                if (!shift) selAnchor = cursor;
                 return true;
             }
             default -> {
                 return false;
             }
         }
+    }
+
+    private void deleteSelection() {
+        int a = selStart();
+        int b = selEnd();
+        text.delete(a, b);
+        cursor = selAnchor = a;
+    }
+
+    private void paste(String clip) {
+        if (clip == null || clip.isEmpty()) return;
+        clip = clip.replaceAll("[\\r\\n\\t]", " ");
+        if (hasSelection()) deleteSelection();
+        int space = maxLength - text.length();
+        if (space <= 0) return;
+        if (clip.length() > space) clip = clip.substring(0, space);
+        text.insert(cursor, clip);
+        cursor = selAnchor = cursor + clip.length();
+        fireChange();
+    }
+
+    private static net.minecraft.client.KeyboardHandler clipboard() {
+        return Minecraft.getInstance().keyboardHandler;
     }
 
     private void fireChange() {

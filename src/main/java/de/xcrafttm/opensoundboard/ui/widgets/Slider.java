@@ -39,8 +39,8 @@ public class Slider extends Widget {
 
     @Override
     public void draw(UiCanvas c) {
-        c.fillRect(x, y, w, h, Theme.ROW);
-        c.border(x, y, w, h, Theme.BORDER);
+        c.fillRoundRect(x, y, w, h, Theme.ROW);
+        c.roundBorder(x, y, w, h, Theme.BORDER);
         int fillW = (int) Math.round(value * (w - 2));
         c.fillRect(x + 1, y + 1, fillW, h - 2, active ? Theme.ACCENT_MUTED : Theme.ROW);
         int hx = x + (int) Math.round(value * (w - 4));

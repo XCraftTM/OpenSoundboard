@@ -28,10 +28,10 @@ public class Toggle extends Widget {
     @Override
     public void draw(UiCanvas c) {
         boolean hover = c.hovered(x, y, w, h);
-        c.fillRect(x, y, w, h, value ? Theme.ACCENT : 0xFF3A3A44);
+        c.fillRoundRect(x, y, w, h, value ? Theme.ACCENT : 0xFF3A3A44);
         int knobW = w / 2 - 3;
         int kx = value ? x + w - knobW - 2 : x + 2;
-        c.fillRect(kx, y + 2, knobW, h - 4, hover ? 0xFFFFFFFF : 0xFFE4E4EA);
+        c.fillRoundRect(kx, y + 2, knobW, h - 4, hover ? 0xFFFFFFFF : 0xFFE4E4EA);
     }
 
     @Override

@@ -30,8 +30,13 @@ public final class Theme {
     public static final int TEXT_MUTED    = 0xFF9A9AA6;
     public static final int TEXT_ON_ACCENT = 0xFFFFFFFF;
 
+    // Text selection highlight (semi-transparent indigo)
+    public static final int SELECTION     = 0x804F46E5;
+    public static final int FIELD_BG      = 0xFF0F0F14;
+
     // Metrics
     public static final int PAD           = 8;
     public static final int GAP           = 6;
     public static final int ROW_H         = 22;
+    public static final int RADIUS        = 2; // very slight rounding
 }

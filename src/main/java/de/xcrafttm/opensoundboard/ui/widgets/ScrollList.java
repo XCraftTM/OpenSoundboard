@@ -67,7 +67,7 @@ public class ScrollList extends Widget {
 
     @Override
     public void draw(UiCanvas c) {
-        c.fillRect(x, y, w, h, background);
+        c.fillRoundRect(x, y, w, h, background);
         c.pushScissor(x, y, w, h);
         int ry = y - scroll;
         for (Row r : rows) {

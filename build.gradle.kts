@@ -65,12 +65,12 @@ dependencies {
         })
         "modImplementation"("net.fabricmc:fabric-loader:${vprop("fabric.loader.version")}")
         "modImplementation"("net.fabricmc.fabric-api:fabric-api:${vprop("fabric.api.version")}")
-        // Simple Voice Chat mod (needed at runtime; remapped by loom on obfuscated targets).
-        "modRuntimeOnly"("maven.modrinth:simple-voice-chat:fabric-${vprop("voicechat.version")}")
+        // Simple Voice Chat mod (runtime; remapped by loom on obfuscated targets). Skipped if unset.
+        vpropOrNull("voicechat.version")?.let { "modRuntimeOnly"("maven.modrinth:simple-voice-chat:fabric-$it") }
     } else {
         "implementation"("net.fabricmc:fabric-loader:${vprop("fabric.loader.version")}")
         "implementation"("net.fabricmc.fabric-api:fabric-api:${vprop("fabric.api.version")}")
-        "runtimeOnly"("maven.modrinth:simple-voice-chat:fabric-${vprop("voicechat.version")}")
+        vpropOrNull("voicechat.version")?.let { "runtimeOnly"("maven.modrinth:simple-voice-chat:fabric-$it") }
     }
 
     // Pure, mapping-neutral shared code (config models, platform interfaces).
