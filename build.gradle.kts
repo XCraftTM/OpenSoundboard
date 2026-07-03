@@ -7,6 +7,7 @@ plugins {
     id("net.fabricmc.fabric-loom") apply false
     id("net.fabricmc.fabric-loom-remap") apply false
     id("maven-publish")
+    id("com.modrinth.minotaur") version "2.8.7"
 }
 
 // --- Per-version properties (from versions/<active>/gradle.properties) -------------------
@@ -88,4 +89,25 @@ tasks.processResources {
     )
     inputs.properties(replacements)
     filesMatching("fabric.mod.json") { expand(replacements) }
+}
+
+// ---------------------------------------------------------------------------
+// Modrinth publishing. The single Fabric-API jar targets BOTH Fabric and Quilt:
+// Quilt loads it through Quilted Fabric API, so no separate build/code is needed —
+// Quilt "support" is just declaring the loader here. Run with a MODRINTH_TOKEN set:
+//   ./gradlew "Set active project to <ver>" && ./gradlew modrinth
+// ---------------------------------------------------------------------------
+modrinth {
+    token.set(System.getenv("MODRINTH_TOKEN") ?: "")
+    projectId.set(rootProject.property("modrinth_project_id").toString())
+    versionNumber.set(version.toString())
+    versionName.set("OpenSoundboard $version")
+    versionType.set("release")
+    uploadFile.set(tasks.named(if (isLegacyObfuscated) "remapJar" else "jar"))
+    gameVersions.set((vpropOrNull("modrinth.game.versions") ?: mcVersion).split(",").map { it.trim() })
+    loaders.set(listOf("fabric", "quilt"))
+    dependencies {
+        required.project("fabric-api")
+        required.project("simple-voice-chat")
+    }
 }
