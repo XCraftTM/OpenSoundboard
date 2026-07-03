@@ -138,19 +138,27 @@ public class SoundboardScreen extends OsbScreen {
     private void buildDetails() {
         details.clear();
         int y = detailsTop + 2;
-        int half = (cw - 6) / 2;
+        boolean sync = SoundboardConfig.data.isSyncAudio();
+        int bindW = 88;
+        int volW = cw - bindW - 6;
 
         localSlider = detail(new Slider(0, v -> onVolume(v, true)).readout(v -> Component.translatable(
-                SoundboardConfig.data.isSyncAudio() ? "gui.opensoundboard.sync_volume" : "gui.opensoundboard.local_volume",
+                sync ? "gui.opensoundboard.sync_volume" : "gui.opensoundboard.local_volume",
                 String.valueOf(pct(v)))));
-        localSlider.bounds(cx, y, half, 18);
-
         playerSlider = detail(new Slider(0, v -> onVolume(v, false))
                 .readout(v -> Component.translatable("gui.opensoundboard.player_volume", String.valueOf(pct(v)))));
-        playerSlider.bounds(cx + half + 6, y, cw - half - 6 - 90, 18);
+        if (sync) {
+            localSlider.bounds(cx, y, volW, 18);
+            playerSlider.bounds(cx, y, volW, 18);
+            playerSlider.visible = false;
+        } else {
+            int half = (volW - 6) / 2;
+            localSlider.bounds(cx, y, half, 18);
+            playerSlider.bounds(cx + half + 6, y, half, 18);
+        }
 
         bindBtn = detail(new Button(GuiTools.keyBindLabel(null), b -> startBinding()).secondary());
-        bindBtn.bounds(cx + cw - 88, y, 88, 18);
+        bindBtn.bounds(cx + cw - bindW, y, bindW, 18);
         y += 24;
 
         timeline = detail(new Slider(0, v -> {
@@ -307,10 +315,15 @@ public class SoundboardScreen extends OsbScreen {
     }
 
     private void refreshDetails() {
-        boolean has = selected != null;
-        for (Widget w : details) w.visible = has;
-        if (!has) return;
-        playerSlider.visible = !SoundboardConfig.data.isSyncAudio();
+        // The details controls stay visible at all times (like the original); they just show a
+        // neutral state and no-op safely when nothing is selected.
+        if (selected == null) {
+            localSlider.set(0);
+            playerSlider.set(0);
+            bindBtn.setLabel(GuiTools.keyBindLabel(null));
+            if (!timeline.isFocused()) timeline.set(0);
+            return;
+        }
         var data = SoundboardConfig.get(selected.getName());
         localSlider.set(data.getLocalVolume());
         playerSlider.set(data.getPlayerVolume());

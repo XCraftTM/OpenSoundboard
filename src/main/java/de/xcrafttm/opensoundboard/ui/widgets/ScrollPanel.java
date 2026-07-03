@@ -39,6 +39,14 @@ public class ScrollPanel extends Widget {
         return contentHeight;
     }
 
+    public int getScroll() {
+        return scroll;
+    }
+
+    public void setScroll(int s) {
+        scroll = Math.max(0, s);
+    }
+
     private void layout() {
         for (int i = 0; i < children.size(); i++) {
             int[] r = rel.get(i);
@@ -56,6 +64,7 @@ public class ScrollPanel extends Widget {
 
     @Override
     public void draw(UiCanvas c) {
+        scroll = Math.max(0, Math.min(scroll, maxScroll()));
         layout();
         c.pushScissor(x, y, w, h);
         for (Widget ch : children) {

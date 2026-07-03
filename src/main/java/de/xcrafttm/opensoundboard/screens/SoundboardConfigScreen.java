@@ -25,6 +25,7 @@ public class SoundboardConfigScreen extends OsbScreen {
 
     private final Screen parent;
     private ScrollPanel panel;
+    private int savedScroll = 0;
     private int px;
     private int py;
     private int pw;
@@ -62,6 +63,7 @@ public class SoundboardConfigScreen extends OsbScreen {
                     SoundboardConfig.data.setSyncGlobalVolume(v);
                     if (v) SoundboardConfig.data.setGlobalPlayerVolume(SoundboardConfig.data.getGlobalLocalVolume());
                     SoundboardConfig.save();
+                    savedScroll = panel.getScroll();
                     rebuildUi();
                 });
 
@@ -116,7 +118,7 @@ public class SoundboardConfigScreen extends OsbScreen {
         toggle(y, w, "option.opensoundboard.wheelFavoritesOnly",
                 SoundboardConfig.data.isWheelFavoritesOnly(), v -> { SoundboardConfig.data.setWheelFavoritesOnly(v); SoundboardConfig.save(); });
         toggle(y, w, "option.opensoundboard.wheelCustomLayout",
-                SoundboardConfig.data.isWheelCustomLayout(), v -> { SoundboardConfig.data.setWheelCustomLayout(v); SoundboardConfig.save(); rebuildUi(); });
+                SoundboardConfig.data.isWheelCustomLayout(), v -> { SoundboardConfig.data.setWheelCustomLayout(v); SoundboardConfig.save(); savedScroll = panel.getScroll(); rebuildUi(); });
 
         Button edit = panel.addChild(new Button(Component.translatable("gui.opensoundboard.wheel.editor.open"),
                 b -> this.minecraft.setScreen(new WheelLayoutEditorScreen(this))).secondary(), 0, y[0], w, 18);
@@ -127,6 +129,8 @@ public class SoundboardConfigScreen extends OsbScreen {
         add(new Button(Component.translatable("gui.done"), b -> done())).bounds(cx, doneY, half, 22);
         add(new Button(Component.translatable("gui.cancel"), b -> this.minecraft.setScreen(parent)).secondary())
                 .bounds(cx + half + 6, doneY, cw - half - 6, 22);
+
+        panel.setScroll(savedScroll);
     }
 
     private void toggle(int[] y, int w, String key, boolean value, Consumer<Boolean> onChange) {
