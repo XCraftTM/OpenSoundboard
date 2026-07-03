@@ -107,15 +107,24 @@ tasks.named<Jar>("jar") {
 
 // ---------------------------------------------------------------------------
 // Modrinth publishing. Fabric only — Simple Voice Chat (a required dependency) does
-// not support Quilt, so we don't list it. Publish with a MODRINTH_TOKEN set:
-//   ./gradlew "Set active project to <ver>" && ./gradlew modrinth
+// not support Quilt, so we don't list it. Provide the token via the MODRINTH_TOKEN env
+// var or a `modrinth_token` property in ~/.gradle/gradle.properties (never committed).
+// One Modrinth version is published per Minecraft version, so switch active + publish each:
+//   ./gradlew stonecutterSwitchTo<ver> && ./gradlew :<ver>:modrinth
+// The changelog comes from the MODRINTH_CHANGELOG env var, else links to the GitHub release.
 // ---------------------------------------------------------------------------
 modrinth {
-    token.set(System.getenv("MODRINTH_TOKEN") ?: "")
+    // Validate without uploading: ./gradlew :<ver>:modrinth -PmodrinthDebug
+    debugMode.set(project.hasProperty("modrinthDebug"))
+    token.set(System.getenv("MODRINTH_TOKEN") ?: rootProject.findProperty("modrinth_token")?.toString() ?: "")
     projectId.set(rootProject.property("modrinth_project_id").toString())
     versionNumber.set(version.toString())
     versionName.set("OpenSoundboard $version")
     versionType.set("release")
+    changelog.set(
+        System.getenv("MODRINTH_CHANGELOG")
+            ?: "Full changelog: https://github.com/XCraftTM/OpenSoundboard/releases/tag/v${rootProject.property("mod_version")}"
+    )
     uploadFile.set(tasks.named(if (isLegacyObfuscated) "remapJar" else "jar"))
     gameVersions.set((vpropOrNull("modrinth.game.versions") ?: mcVersion).split(",").map { it.trim() })
     loaders.set(listOf("fabric"))
