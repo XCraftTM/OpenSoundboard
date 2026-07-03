@@ -1,7 +1,7 @@
 package de.xcrafttm.opensoundboard;
 
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
-import de.xcrafttm.opensoundboard.screens.DemoScreen;
+import de.xcrafttm.opensoundboard.screens.SoundboardScreen;
 import de.xcrafttm.opensoundboard.tools.KeybindHandler;
 import de.xcrafttm.opensoundboard.tools.McCompat;
 import net.fabricmc.api.ClientModInitializer;
@@ -42,11 +42,12 @@ public class OpenSoundboardClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             KeybindHandler.tick(client, soundDir);
 
-            // Preview: press U with no screen open to show the custom UI demo.
+            // Preview: press U with no screen open to show the soundboard (temporary until the
+            // real keybind lands with the wheel).
             boolean uDown = client.screen == null
                     && GLFW.glfwGetKey(McCompat.windowHandle(client), GLFW.GLFW_KEY_U) == GLFW.GLFW_PRESS;
             if (uDown && !previewKeyWasDown) {
-                client.setScreen(new DemoScreen());
+                client.setScreen(new SoundboardScreen());
             }
             previewKeyWasDown = uDown;
         });

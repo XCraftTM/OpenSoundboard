@@ -19,4 +19,13 @@ public final class McCompat {
         /*return client.getWindow().getWindow();
         *///?}
     }
+
+    /** Open a folder in the OS file explorer. Util moved from net.minecraft.Util to net.minecraft.util.Util. */
+    public static void openFolder(java.io.File folder) {
+        //? if >=1.21.2 {
+        net.minecraft.util.Util.getPlatform().openFile(folder);
+        //?} else {
+        /*net.minecraft.Util.getPlatform().openFile(folder);
+        *///?}
+    }
 }

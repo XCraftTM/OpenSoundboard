@@ -49,6 +49,14 @@ public abstract class OsbScreen extends Screen {
         return widget;
     }
 
+    /** Rebuild the widget list in place (e.g. when a toggle changes what controls are shown). */
+    protected void rebuildUi() {
+        widgets.clear();
+        focused = null;
+        dragging = null;
+        buildUi();
+    }
+
     protected void setFocused(Widget widget) {
         if (focused == widget) return;
         if (focused != null) focused.setFocused(false);
