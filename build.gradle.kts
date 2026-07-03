@@ -91,6 +91,20 @@ tasks.processResources {
     filesMatching("fabric.mod.json") { expand(replacements) }
 }
 
+// Bundle the pure :common classes (config models, platform interfaces) into the mod jar.
+// They are on the classpath in dev via project(":common"), but Loom does not package a plain
+// `implementation` subproject, so an installed jar hit NoClassDefFoundError for
+// de.xcrafttm.opensoundboard.config.SoundboardConfig. remapJar (legacy) remaps the jar output;
+// these classes have no Minecraft references so they pass through unchanged.
+evaluationDependsOn(":common")
+val commonMainOutput = project(":common")
+    .extensions.getByType(SourceSetContainer::class.java)
+    .getByName("main").output
+tasks.named<Jar>("jar") {
+    from(commonMainOutput)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 // ---------------------------------------------------------------------------
 // Modrinth publishing. Fabric only — Simple Voice Chat (a required dependency) does
 // not support Quilt, so we don't list it. Publish with a MODRINTH_TOKEN set:
