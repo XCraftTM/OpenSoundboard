@@ -92,9 +92,8 @@ tasks.processResources {
 }
 
 // ---------------------------------------------------------------------------
-// Modrinth publishing. The single Fabric-API jar targets BOTH Fabric and Quilt:
-// Quilt loads it through Quilted Fabric API, so no separate build/code is needed —
-// Quilt "support" is just declaring the loader here. Run with a MODRINTH_TOKEN set:
+// Modrinth publishing. Fabric only — Simple Voice Chat (a required dependency) does
+// not support Quilt, so we don't list it. Publish with a MODRINTH_TOKEN set:
 //   ./gradlew "Set active project to <ver>" && ./gradlew modrinth
 // ---------------------------------------------------------------------------
 modrinth {
@@ -105,7 +104,7 @@ modrinth {
     versionType.set("release")
     uploadFile.set(tasks.named(if (isLegacyObfuscated) "remapJar" else "jar"))
     gameVersions.set((vpropOrNull("modrinth.game.versions") ?: mcVersion).split(",").map { it.trim() })
-    loaders.set(listOf("fabric", "quilt"))
+    loaders.set(listOf("fabric"))
     dependencies {
         required.project("fabric-api")
         required.project("simple-voice-chat")
