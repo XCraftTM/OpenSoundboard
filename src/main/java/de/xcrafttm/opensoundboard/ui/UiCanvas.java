@@ -64,6 +64,15 @@ public final class UiCanvas {
         //?}
     }
 
+    /** Clip subsequent drawing to this rectangle (enableScissor is identical on both surfaces). */
+    public void pushScissor(int x, int y, int w, int h) {
+        g.enableScissor(x, y, x + w, y + h);
+    }
+
+    public void popScissor() {
+        g.disableScissor();
+    }
+
     public int textWidth(String s) {
         return font.width(s);
     }
