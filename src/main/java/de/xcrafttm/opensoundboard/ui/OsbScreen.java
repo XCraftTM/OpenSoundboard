@@ -44,6 +44,11 @@ public abstract class OsbScreen extends Screen {
         return false;
     }
 
+    /** Optional screen-level click handling, after no widget consumed the click. */
+    protected boolean screenMouseClicked(double mx, double my, int button) {
+        return false;
+    }
+
     protected <T extends Widget> T add(T widget) {
         widgets.add(widget);
         return widget;
@@ -212,7 +217,7 @@ public abstract class OsbScreen extends Screen {
             dragging = hit;
             return true;
         }
-        return false;
+        return screenMouseClicked(mx, my, button);
     }
 
     private boolean dispatchKey(int key, int scan, int mods) {
