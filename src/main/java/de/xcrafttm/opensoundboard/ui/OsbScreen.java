@@ -69,6 +69,31 @@ public abstract class OsbScreen extends Screen {
         for (Widget w : widgets) {
             if (w.visible) w.draw(c);
         }
+        drawTooltip(c);
+    }
+
+    private void drawTooltip(UiCanvas c) {
+        Widget hov = null;
+        for (int i = widgets.size() - 1; i >= 0; i--) {
+            Widget w = widgets.get(i);
+            if (w.visible && w.tooltip != null && w.contains(c.mouseX, c.mouseY)) {
+                hov = w;
+                break;
+            }
+        }
+        if (hov == null) return;
+        String[] lines = hov.tooltip.split("\n");
+        int tw = 0;
+        for (String ln : lines) tw = Math.max(tw, c.textWidth(ln));
+        int pad = 4;
+        int lh = 10;
+        int bw = tw + pad * 2;
+        int bh = lines.length * lh + pad * 2 - 2;
+        int bx = Math.min(c.mouseX + 10, this.width - bw - 2);
+        int by = Math.min(Math.max(2, c.mouseY - bh - 4), this.height - bh - 2);
+        c.fillRoundRect(bx, by, bw, bh, 0xF01A1A22);
+        c.roundBorder(bx, by, bw, bh, Theme.ACCENT);
+        for (int i = 0; i < lines.length; i++) c.text(lines[i], bx + pad, by + pad + i * lh, Theme.TEXT);
     }
 
     // ---- render entrypoint (26.1 render overhaul) --------------------------------------

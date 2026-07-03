@@ -39,7 +39,7 @@ public class SoundboardConfigScreen extends OsbScreen {
     @Override
     protected void buildUi() {
         ph = (int) (this.height * 0.9);
-        pw = Math.max(380, Math.min(520, (int) (this.width * 0.55)));
+        pw = Math.max(400, (int) (this.width * 0.7));
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         int cx = px + Theme.PAD;

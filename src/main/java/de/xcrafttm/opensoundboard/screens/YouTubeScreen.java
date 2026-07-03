@@ -44,7 +44,7 @@ public class YouTubeScreen extends OsbScreen {
     @Override
     protected void buildUi() {
         ph = (int) (this.height * 0.9);
-        pw = Math.max(460, Math.min(680, (int) (this.width * 0.7)));
+        pw = Math.max(460, (int) (this.width * 0.7));
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         int cx = px + Theme.PAD;
@@ -56,10 +56,10 @@ public class YouTubeScreen extends OsbScreen {
         y += 26;
 
         downloadBtn = add(new Button(downloadLabel(), b -> onDownload()));
-        downloadBtn.bounds(cx, y, cw - 96, 22);
-        add(new Button(Component.translatable("gui.opensoundboard.folder"),
+        downloadBtn.bounds(cx, y, cw - 96, 22).tooltip(Component.translatable("tooltip.opensoundboard.youtube").getString());
+        add(new Button(Component.literal("📁 ").append(Component.translatable("gui.opensoundboard.folder")),
                 b -> McCompat.openFolder(OpenSoundboardClient.soundDir)).secondary())
-                .bounds(cx + cw - 90, y, 90, 22);
+                .bounds(cx + cw - 90, y, 90, 22).tooltip(Component.translatable("tooltip.opensoundboard.folder").getString());
         y += 28;
 
         barY = y - 5;
@@ -76,8 +76,8 @@ public class YouTubeScreen extends OsbScreen {
 
     private Component downloadLabel() {
         return currentProcess != null
-                ? Component.translatable("gui.opensoundboard.youtube.cancel")
-                : Component.translatable("gui.opensoundboard.youtube.download");
+                ? Component.literal("⏹ ").append(Component.translatable("gui.opensoundboard.youtube.cancel"))
+                : Component.literal("⬇ ").append(Component.translatable("gui.opensoundboard.youtube.download"));
     }
 
     private void addLog(String line) {

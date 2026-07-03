@@ -13,6 +13,7 @@ import de.xcrafttm.opensoundboard.ui.Widget;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
 import de.xcrafttm.opensoundboard.ui.widgets.ScrollList;
 import de.xcrafttm.opensoundboard.ui.widgets.Slider;
+import de.xcrafttm.opensoundboard.ui.widgets.SplitButton;
 import de.xcrafttm.opensoundboard.ui.widgets.TextField;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -33,7 +34,7 @@ import java.util.stream.Collectors;
 public class SoundboardScreen extends OsbScreen {
 
     private static final int STAR_W = 14;
-    private static final int PLAY_W = 40;
+    private static final int PLAY_W = 28;
     private static final int ROW_H = 18;
 
     private static final String BACK = "__BACK__";
@@ -49,8 +50,7 @@ public class SoundboardScreen extends OsbScreen {
 
     private TextField search;
     private ScrollList list;
-    private Button sortModeBtn;
-    private Button sortDirBtn;
+    private SplitButton sortBtn;
 
     // details
     private Slider localSlider;
@@ -74,7 +74,7 @@ public class SoundboardScreen extends OsbScreen {
     @Override
     protected void buildUi() {
         ph = (int) (this.height * 0.9);
-        pw = Math.max(420, Math.min(640, (int) (this.width * 0.7)));
+        pw = Math.max(420, (int) (this.width * 0.7));
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         cx = px + Theme.PAD;
@@ -89,25 +89,28 @@ public class SoundboardScreen extends OsbScreen {
         search.bounds(cx, y, cw, 18);
         y += 24;
 
-        // Toolbar
-        int n = 6;
+        // Toolbar: 4 action buttons + a sort split button (2 units wide)
         int gap = 4;
-        int bw = (cw - gap * (n - 1)) / n;
-        add(new Button(Component.translatable("gui.opensoundboard.refresh"), b -> refresh()).secondary())
-                .bounds(cx, y, bw, 18);
-        add(new Button(Component.translatable("gui.opensoundboard.folder"),
+        int unit = (cw - gap * 5) / 6;
+        int bx = cx;
+        add(new Button(icon("🔄", "gui.opensoundboard.refresh"), b -> refresh()).secondary())
+                .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.refresh"));
+        bx += unit + gap;
+        add(new Button(icon("📁", "gui.opensoundboard.folder"),
                 b -> McCompat.openFolder(OpenSoundboardClient.soundDir)).secondary())
-                .bounds(cx + (bw + gap), y, bw, 18);
-        add(new Button(Component.translatable("gui.opensoundboard.config"),
+                .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.folder"));
+        bx += unit + gap;
+        add(new Button(icon("⚙", "gui.opensoundboard.config"),
                 b -> this.minecraft.setScreen(new SoundboardConfigScreen(this))).secondary())
-                .bounds(cx + (bw + gap) * 2, y, bw, 18);
-        add(new Button(Component.translatable("gui.opensoundboard.youtube"),
+                .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.config"));
+        bx += unit + gap;
+        add(new Button(icon("⬇", "gui.opensoundboard.youtube"),
                 b -> this.minecraft.setScreen(new YouTubeScreen(this))).secondary())
-                .bounds(cx + (bw + gap) * 3, y, bw, 18);
-        sortModeBtn = add(new Button(sortModeLabel(), b -> cycleSortMode()).secondary());
-        sortModeBtn.bounds(cx + (bw + gap) * 4, y, bw, 18);
-        sortDirBtn = add(new Button(sortDirLabel(), b -> toggleSortDir()).secondary());
-        sortDirBtn.bounds(cx + (bw + gap) * 5, y, bw, 18);
+                .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.youtube"));
+        bx += unit + gap;
+        sortBtn = add(new SplitButton(0.25f, sortDirLabel(), this::toggleSortDir, sortModeLabel(), this::cycleSortMode));
+        sortBtn.bounds(bx, y, unit * 2 + gap, 18);
+        sortBtn.tooltip(tip("tooltip.opensoundboard.sortDir") + "\n" + tip("tooltip.opensoundboard.sortMode"));
         y += 24;
 
         // Details block occupies a fixed strip at the bottom of the panel.
@@ -159,6 +162,7 @@ public class SoundboardScreen extends OsbScreen {
 
         bindBtn = detail(new Button(GuiTools.keyBindLabel(null), b -> startBinding()).secondary());
         bindBtn.bounds(cx + cw - bindW, y, bindW, 18);
+        bindBtn.tooltip(tip("tooltip.opensoundboard.keybind"));
         y += 24;
 
         timeline = detail(new Slider(0, v -> {
@@ -177,16 +181,22 @@ public class SoundboardScreen extends OsbScreen {
         }));
         timeField.bounds(cx, y, 70, 18);
 
-        int tb = cx + 76;
         int tbw = 20;
-        detail(new Button(Component.literal("⏹"), b -> SoundboardAudioSystem.stopAll()).secondary()).bounds(tb, y, tbw, 18);
-        detail(new Button(Component.literal("⏪"), b -> skip(-1)).secondary()).bounds(tb + 24, y, tbw, 18);
+        int tbg = 4;
+        int groupW = tbw * 5 + tbg * 4;
+        int tb = cx + (cw - groupW) / 2;
+        detail(new Button(Component.literal("⏹"), b -> SoundboardAudioSystem.stopAll()).secondary())
+                .bounds(tb, y, tbw, 18).tooltip(tip("gui.opensoundboard.stop_all"));
+        detail(new Button(Component.literal("⏪"), b -> skip(-1)).secondary())
+                .bounds(tb + (tbw + tbg), y, tbw, 18).tooltip(tip("gui.opensoundboard.skip_back"));
         pauseBtn = detail(new Button(Component.literal("⏸"), b -> togglePause()).secondary());
-        pauseBtn.bounds(tb + 48, y, tbw, 18);
-        detail(new Button(Component.literal("⏩"), b -> skip(1)).secondary()).bounds(tb + 72, y, tbw, 18);
-        detail(new Button(Component.literal("🔁"), b -> toggleLoop()).secondary()).bounds(tb + 96, y, tbw, 18);
-        detail(new Button(Component.translatable("gui.opensoundboard.set_start"), b -> setStart()).secondary())
-                .bounds(cx + cw - 70, y, 70, 18);
+        pauseBtn.bounds(tb + (tbw + tbg) * 2, y, tbw, 18).tooltip(tip("gui.opensoundboard.pause_resume"));
+        detail(new Button(Component.literal("⏩"), b -> skip(1)).secondary())
+                .bounds(tb + (tbw + tbg) * 3, y, tbw, 18).tooltip(tip("gui.opensoundboard.skip_forward"));
+        detail(new Button(Component.literal("🔁"), b -> toggleLoop()).secondary())
+                .bounds(tb + (tbw + tbg) * 4, y, tbw, 18).tooltip(tip("gui.opensoundboard.loop"));
+        detail(new Button(Component.literal("⚑ ").append(Component.translatable("gui.opensoundboard.set_start")), b -> setStart()).secondary())
+                .bounds(cx + cw - 84, y, 84, 18).tooltip(tip("tooltip.opensoundboard.set_start"));
     }
 
     // ---------------------------------------------------------------- scan / list
@@ -268,7 +278,7 @@ public class SoundboardScreen extends OsbScreen {
                 else if (hovered) c.fillRoundRect(rx, ry, rw, ROW_H, Theme.ROW);
 
                 c.fillRoundRect(rx + 3, ry + 2, PLAY_W, ROW_H - 4, playing ? 0xFFB23A3A : Theme.ACCENT);
-                c.centeredText(Component.translatable(playing ? "gui.opensoundboard.stop" : "gui.opensoundboard.play"),
+                c.centeredText(Component.literal(playing ? "⏹" : "▶"),
                         rx + 3 + PLAY_W / 2, ry + 5, Theme.TEXT_ON_ACCENT);
 
                 c.text(fav ? "★" : "☆", rx + PLAY_W + 8, ry + 5, fav ? 0xFFF0C044 : Theme.TEXT_MUTED);
@@ -437,15 +447,23 @@ public class SoundboardScreen extends OsbScreen {
         for (int i = 0; i < modes.length; i++) if (modes[i].equals(cur)) next = (i + 1) % modes.length;
         SoundboardConfig.data.setSortMode(modes[next]);
         SoundboardConfig.save();
-        sortModeBtn.setLabel(sortModeLabel());
+        sortBtn.setRight(sortModeLabel());
         scanSounds();
     }
 
     private void toggleSortDir() {
         SoundboardConfig.data.setSortAscending(!SoundboardConfig.data.isSortAscending());
         SoundboardConfig.save();
-        sortDirBtn.setLabel(sortDirLabel());
+        sortBtn.setLeft(sortDirLabel());
         scanSounds();
+    }
+
+    private static Component icon(String glyph, String key) {
+        return Component.literal(glyph + " ").append(Component.translatable(key));
+    }
+
+    private static String tip(String key) {
+        return Component.translatable(key).getString();
     }
 
     private void refresh() {

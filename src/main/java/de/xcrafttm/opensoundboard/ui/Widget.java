@@ -14,8 +14,16 @@ public abstract class Widget {
     public boolean visible = true;
     public boolean active = true;
 
+    /** Optional hover tooltip (supports "\n" for multiple lines). */
+    public String tooltip = null;
+
     /** Whether this widget currently holds keyboard focus (managed by {@link OsbScreen}). */
     protected boolean focused = false;
+
+    public Widget tooltip(String tooltip) {
+        this.tooltip = tooltip;
+        return this;
+    }
 
     public Widget bounds(int x, int y, int w, int h) {
         this.x = x;
