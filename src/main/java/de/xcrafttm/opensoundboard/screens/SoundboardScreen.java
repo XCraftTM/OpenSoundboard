@@ -9,6 +9,7 @@ import de.xcrafttm.opensoundboard.tools.YtDlpManager;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.Widget;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
 import de.xcrafttm.opensoundboard.ui.widgets.ScrollList;
 import de.xcrafttm.opensoundboard.ui.widgets.Slider;
@@ -60,6 +61,7 @@ public class SoundboardScreen extends OsbScreen {
     private Button pauseBtn;
     private int detailsTop;
 
+    private final List<Widget> details = new ArrayList<>();
     private File selected = null;
     private boolean binding = false;
 
@@ -109,9 +111,9 @@ public class SoundboardScreen extends OsbScreen {
         y += 24;
 
         // Details block occupies a fixed strip at the bottom of the panel.
-        int detailsH = 92;
+        int detailsH = 82;
         detailsTop = py + ph - Theme.PAD - 22 - 6 - detailsH;
-        int listBottom = detailsTop - 6;
+        int listBottom = detailsTop - 14;
 
         list = add(new ScrollList().gap(2));
         list.bounds(cx, y, cw, listBottom - y);
@@ -127,32 +129,38 @@ public class SoundboardScreen extends OsbScreen {
         else refreshDetails();
     }
 
+    private <T extends Widget> T detail(T w) {
+        add(w);
+        details.add(w);
+        return w;
+    }
+
     private void buildDetails() {
-        int y = detailsTop + 14;
+        details.clear();
+        int y = detailsTop + 2;
         int half = (cw - 6) / 2;
 
-        localSlider = add(new Slider(0, v -> onVolume(v, true)));
-        localSlider.readout(v -> Component.translatable(
+        localSlider = detail(new Slider(0, v -> onVolume(v, true)).readout(v -> Component.translatable(
                 SoundboardConfig.data.isSyncAudio() ? "gui.opensoundboard.sync_volume" : "gui.opensoundboard.local_volume",
-                String.valueOf(pct(v))));
+                String.valueOf(pct(v)))));
         localSlider.bounds(cx, y, half, 18);
 
-        playerSlider = add(new Slider(0, v -> onVolume(v, false)));
-        playerSlider.readout(v -> Component.translatable("gui.opensoundboard.player_volume", String.valueOf(pct(v))));
+        playerSlider = detail(new Slider(0, v -> onVolume(v, false))
+                .readout(v -> Component.translatable("gui.opensoundboard.player_volume", String.valueOf(pct(v)))));
         playerSlider.bounds(cx + half + 6, y, cw - half - 6 - 90, 18);
 
-        bindBtn = add(new Button(GuiTools.keyBindLabel(null), b -> startBinding()).secondary());
+        bindBtn = detail(new Button(GuiTools.keyBindLabel(null), b -> startBinding()).secondary());
         bindBtn.bounds(cx + cw - 88, y, 88, 18);
         y += 24;
 
-        timeline = add(new Slider(0, v -> {
+        timeline = detail(new Slider(0, v -> {
             if (selected != null && SoundboardAudioSystem.isPlaying(selected.getName()))
                 SoundboardAudioSystem.setCursor(selected.getName(), v.floatValue());
         }).readout(v -> timelineLabel()));
         timeline.bounds(cx, y, cw, 18);
         y += 24;
 
-        timeField = add(new TextField().maxLength(10).onChange(t -> {
+        timeField = detail(new TextField().maxLength(10).onChange(t -> {
             if (selected == null || !timeField.isFocused()) return;
             if (!SoundboardAudioSystem.isPlaying(selected.getName())) return;
             long ms = GuiTools.parseTimeMillis(t);
@@ -163,13 +171,13 @@ public class SoundboardScreen extends OsbScreen {
 
         int tb = cx + 76;
         int tbw = 20;
-        add(new Button(Component.literal("⏹"), b -> SoundboardAudioSystem.stopAll()).secondary()).bounds(tb, y, tbw, 18);
-        add(new Button(Component.literal("⏪"), b -> skip(-1)).secondary()).bounds(tb + 24, y, tbw, 18);
-        pauseBtn = add(new Button(Component.literal("⏸"), b -> togglePause()).secondary());
+        detail(new Button(Component.literal("⏹"), b -> SoundboardAudioSystem.stopAll()).secondary()).bounds(tb, y, tbw, 18);
+        detail(new Button(Component.literal("⏪"), b -> skip(-1)).secondary()).bounds(tb + 24, y, tbw, 18);
+        pauseBtn = detail(new Button(Component.literal("⏸"), b -> togglePause()).secondary());
         pauseBtn.bounds(tb + 48, y, tbw, 18);
-        add(new Button(Component.literal("⏩"), b -> skip(1)).secondary()).bounds(tb + 72, y, tbw, 18);
-        add(new Button(Component.literal("🔁"), b -> toggleLoop()).secondary()).bounds(tb + 96, y, tbw, 18);
-        add(new Button(Component.translatable("gui.opensoundboard.set_start"), b -> setStart()).secondary())
+        detail(new Button(Component.literal("⏩"), b -> skip(1)).secondary()).bounds(tb + 72, y, tbw, 18);
+        detail(new Button(Component.literal("🔁"), b -> toggleLoop()).secondary()).bounds(tb + 96, y, tbw, 18);
+        detail(new Button(Component.translatable("gui.opensoundboard.set_start"), b -> setStart()).secondary())
                 .bounds(cx + cw - 70, y, 70, 18);
     }
 
@@ -300,18 +308,9 @@ public class SoundboardScreen extends OsbScreen {
 
     private void refreshDetails() {
         boolean has = selected != null;
-        boolean sync = SoundboardConfig.data.isSyncAudio();
-        localSlider.visible = has;
-        localSlider.active = has;
-        playerSlider.visible = has && !sync;
-        playerSlider.active = has && !sync;
-        bindBtn.visible = has;
-        bindBtn.active = has;
-        timeline.visible = has;
-        timeField.visible = has;
-        pauseBtn.visible = has;
-
+        for (Widget w : details) w.visible = has;
         if (!has) return;
+        playerSlider.visible = !SoundboardConfig.data.isSyncAudio();
         var data = SoundboardConfig.get(selected.getName());
         localSlider.set(data.getLocalVolume());
         playerSlider.set(data.getPlayerVolume());
@@ -319,10 +318,27 @@ public class SoundboardScreen extends OsbScreen {
                 ? Component.translatable("gui.opensoundboard.keybind.listening")
                 : GuiTools.keyBindLabel(data.getKeybind()));
         boolean playing = SoundboardAudioSystem.isPlaying(selected.getName());
+        pauseBtn.setLabel(Component.literal(SoundboardAudioSystem.isPaused(selected.getName()) ? "▶" : "⏸"));
         if (playing) {
             if (!timeline.isFocused()) timeline.set(SoundboardAudioSystem.getProgress(selected.getName()));
             if (!timeField.isFocused())
                 timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(selected.getName())));
+        }
+    }
+
+    @Override
+    protected void renderContent(UiCanvas c) {
+        c.fillRect(0, 0, this.width, this.height, Theme.SCRIM);
+        c.fillRoundRect(px, py, pw, ph, Theme.PANEL);
+        c.roundBorder(px, py, pw, ph, Theme.BORDER);
+        c.fillRect(px + Theme.RADIUS, py, pw - Theme.RADIUS * 2, 3, Theme.ACCENT);
+        c.centeredText(Component.translatable("gui.opensoundboard.title"), px + pw / 2, py + 12, Theme.TEXT);
+
+        int hy = detailsTop - 11;
+        if (selected == null) {
+            c.centeredText(Component.translatable("gui.opensoundboard.select_hint"), px + pw / 2, hy, Theme.TEXT_MUTED);
+        } else {
+            c.centeredText(Component.translatable("gui.opensoundboard.settings_for", selected.getName()), px + pw / 2, hy, 0xFFECD27A);
         }
     }
 

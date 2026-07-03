@@ -21,6 +21,11 @@ public final class Theme {
     public static final int ROW           = 0x14FFFFFF;
     public static final int ROW_HOVER      = 0x24FFFFFF;
 
+    // Secondary button fills (opaque so they read even without a panel behind them)
+    public static final int BTN           = 0xFF2A2A34;
+    public static final int BTN_HOVER     = 0xFF363642;
+    public static final int BTN_DISABLED  = 0xFF20202A;
+
     // Borders
     public static final int BORDER        = 0xFF2C2C38;
     public static final int BORDER_STRONG  = 0xFF3C3C4A;

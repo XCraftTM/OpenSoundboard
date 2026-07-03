@@ -2,6 +2,7 @@ package de.xcrafttm.opensoundboard.ui.widgets;
 
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.UiSound;
 import de.xcrafttm.opensoundboard.ui.Widget;
 
 import java.util.function.Consumer;
@@ -37,6 +38,7 @@ public class Toggle extends Widget {
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (button == 0 && active) {
+            UiSound.click();
             value = !value;
             onChange.accept(value);
             return true;

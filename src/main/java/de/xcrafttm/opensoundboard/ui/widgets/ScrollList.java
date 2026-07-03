@@ -106,7 +106,11 @@ public class ScrollList extends Widget {
         for (Row r : rows) {
             int rh = r.height();
             if (my >= ry && my < ry + rh && my >= y && my < y + h) {
-                return r.click(mx, my, x, ry, w, button);
+                if (r.click(mx, my, x, ry, w, button)) {
+                    de.xcrafttm.opensoundboard.ui.UiSound.click();
+                    return true;
+                }
+                return false;
             }
             ry += rh + rowGap;
         }

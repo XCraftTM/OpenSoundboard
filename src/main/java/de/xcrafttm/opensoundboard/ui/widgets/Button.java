@@ -2,6 +2,7 @@ package de.xcrafttm.opensoundboard.ui.widgets;
 
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.UiSound;
 import de.xcrafttm.opensoundboard.ui.Widget;
 import net.minecraft.network.chat.Component;
 
@@ -34,9 +35,9 @@ public class Button extends Widget {
     public void draw(UiCanvas c) {
         boolean hover = active && c.hovered(x, y, w, h);
         if (primary) {
-            c.fillRoundRect(x, y, w, h, active ? (hover ? Theme.ACCENT_HOVER : Theme.ACCENT) : Theme.ROW);
+            c.fillRoundRect(x, y, w, h, active ? (hover ? Theme.ACCENT_HOVER : Theme.ACCENT) : Theme.BTN_DISABLED);
         } else {
-            c.fillRoundRect(x, y, w, h, hover ? Theme.ROW_HOVER : Theme.ROW);
+            c.fillRoundRect(x, y, w, h, !active ? Theme.BTN_DISABLED : (hover ? Theme.BTN_HOVER : Theme.BTN));
             c.roundBorder(x, y, w, h, hover ? Theme.BORDER_STRONG : Theme.BORDER);
         }
         int textColor = !active ? Theme.TEXT_MUTED : (primary ? Theme.TEXT_ON_ACCENT : Theme.TEXT);
@@ -46,6 +47,7 @@ public class Button extends Widget {
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (button == 0 && active) {
+            UiSound.click();
             onClick.accept(this);
             return true;
         }

@@ -23,18 +23,18 @@ public class YouTubeScreen extends OsbScreen {
 
     private final Screen parent;
     private TextField url;
-    private Button audioBtn;
     private Button downloadBtn;
     private ScrollList log;
 
     private volatile Process currentProcess = null;
-    private boolean audioOnly = true;
+    private final boolean audioOnly = true;
     private int progress = 0;
 
     private int px;
     private int py;
     private int pw;
     private int ph;
+    private int barY;
 
     public YouTubeScreen(Screen parent) {
         super(Component.translatable("gui.opensoundboard.youtube.title"));
@@ -55,18 +55,15 @@ public class YouTubeScreen extends OsbScreen {
         url.bounds(cx, y, cw, 20);
         y += 26;
 
-        audioBtn = add(new Button(audioLabel(), b -> {
-            audioOnly = !audioOnly;
-            b.setLabel(audioLabel());
-        }).secondary());
-        audioBtn.bounds(cx, y, 150, 18);
         downloadBtn = add(new Button(downloadLabel(), b -> onDownload()));
-        downloadBtn.bounds(cx + 156, y, 120, 18);
+        downloadBtn.bounds(cx, y, cw - 96, 22);
         add(new Button(Component.translatable("gui.opensoundboard.folder"),
                 b -> McCompat.openFolder(OpenSoundboardClient.soundDir)).secondary())
-                .bounds(cx + cw - 90, y, 90, 18);
-        y += 26;
+                .bounds(cx + cw - 90, y, 90, 22);
+        y += 28;
 
+        barY = y - 5;
+        y += 4;
         int doneY = py + ph - Theme.PAD - 22;
         int saveY = doneY - 14;
         log = add(new ScrollList().gap(1));
@@ -75,11 +72,6 @@ public class YouTubeScreen extends OsbScreen {
 
         add(new Button(Component.translatable("gui.done"), b -> this.minecraft.setScreen(parent)))
                 .bounds(px + (pw - 160) / 2, doneY, 160, 22);
-    }
-
-    private Component audioLabel() {
-        return Component.translatable("gui.opensoundboard.youtube.audio_only")
-                .copy().append(": " + (audioOnly ? "ON" : "OFF"));
     }
 
     private Component downloadLabel() {
@@ -160,7 +152,6 @@ public class YouTubeScreen extends OsbScreen {
         // progress bar just above the log
         int cx = px + Theme.PAD;
         int cw = pw - Theme.PAD * 2;
-        int barY = py + 28 + 26 + 26 - 8;
         c.fillRoundRect(cx, barY, cw, 4, 0xFF3A3A44);
         int fill = (int) (cw * (Math.max(0, Math.min(100, progress)) / 100.0));
         if (fill > 0) c.fillRoundRect(cx, barY, fill, 4, Theme.ACCENT);
