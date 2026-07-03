@@ -39,7 +39,7 @@
 
 - Paste a YouTube URL and download audio directly into your sounds folder
 - Progress bar and live log output
-- Audio-only or full video download modes
+- Extracts audio automatically as MP3
 - Automatically downloads yt-dlp and ffmpeg on first use
 
 **Configuration**
@@ -52,14 +52,14 @@
 
 ## Supported Versions
 
-| Minecraft  | Status      |
-|------------|-------------|
-| 1.21.11    | Supported   |
-| 1.21.10    | Supported   |
-| 1.21.8     | Supported   |
-| 1.21.5     | Supported   |
-| 1.21.4     | Supported   |
-| 1.21.1     | Supported   |
+| Minecraft              | Status                |
+|------------------------|-----------------------|
+| 26.1, 26.1.1, 26.1.2   | ✅ Supported (latest)  |
+| 1.21.11                | ✅ Supported           |
+| 1.21, 1.21.1           | ✅ Supported           |
+| 1.21.10, 1.21.8, 1.21.5, 1.21.4 | ⚠️ Deprecated |
+
+> **Deprecated** versions were supported under the previous per-version build and no longer receive updates. New releases target the supported versions above.
 
 ## Dependencies
 
@@ -67,7 +67,6 @@
 |-----|----------|
 | [Fabric API](https://modrinth.com/mod/fabric-api) | Yes |
 | [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat) | Yes |
-| [owo-lib](https://modrinth.com/mod/owo-lib) | Yes |
 | [Mod Menu](https://modrinth.com/mod/modmenu) | Optional |
 
 ## Getting Started
@@ -79,12 +78,24 @@
 
 ## Building from Source
 
+The project uses [Stonecutter](https://stonecutter.kikugie.dev/) to build every supported Minecraft version from a single source tree.
+
 ```bash
-# Build all versions and collect JARs into build/jars/
-./gradlew collectJars
+# Build every supported version and collect the jars into build/jars/
+JAVA_HOME=<jdk-25> ./gradlew buildAllJars
 ```
 
-The release-ready JARs for every supported Minecraft version will be in `build/jars/`.
+The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.3.0+mc26.1.2.jar`. (Each is also left in `versions/<version>/build/libs/`.)
+
+To work on a single version, switch the active version first, then build or run just that node:
+
+```bash
+./gradlew stonecutterSwitchTo26.1.2   # pick the active version
+./gradlew :26.1.2:build               # build just that node -> versions/26.1.2/build/libs/
+./gradlew client_26_1_2               # switch + launch its client
+```
+
+> Minecraft 26.x builds require the Gradle daemon to run on Java 25 (set `JAVA_HOME` accordingly); 1.21.x versions target Java 21 but build fine on a Java 25 daemon too. A plain `./gradlew build` won't work — it tries to build every version as the active one, which breaks across the 1.21.x/26.x boundary.
 
 ## Credits
 

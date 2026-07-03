@@ -1,0 +1,142 @@
+{
+  "title.opensoundboard.config": "OpenSoundboard Config",
+
+  "category.opensoundboard.general": "OpenSoundboard",
+  "key.category.opensoundboard.general": "OpenSoundboard",
+
+  "key.opensoundboard.open": "Open Soundboard",
+
+  "message.opensoundboard.vc_not_connected": "Voice chat is not connected.",
+  "message.opensoundboard.muted_error": "You are muted and cannot play sounds.",
+  "message.opensoundboard.decode_failed": "Failed to decode sound: %s",
+  "message.opensoundboard.empty_url": "Please enter a URL.",
+  "message.opensoundboard.binaries_missing": "Could not prepare yt-dlp/ffmpeg. Check your internet connection and game folder permissions.",
+  "message.opensoundboard.download_completed": "Download completed.",
+
+  "option.opensoundboard.playWhileMuted": "Play While Muted",
+  "tooltip.opensoundboard.playWhileMuted": "Allows sounds to play even if you are muted in voice chat.",
+
+  "option.opensoundboard.playLocally": "Play Locally",
+  "tooltip.opensoundboard.playLocally": "Whether you hear the sounds you play.",
+
+  "option.opensoundboard.syncAudio": "Sync Per-Sound Volumes",
+  "tooltip.opensoundboard.syncAudio": "Uses a single volume slider per sound (syncs local and player volume).",
+
+  "option.opensoundboard.syncGlobalVolume": "Sync Global Volumes",
+  "tooltip.opensoundboard.syncGlobalVolume": "Uses one global volume control for both local and player volumes.",
+
+  "option.opensoundboard.globalVolume": "Global Volume",
+  "tooltip.opensoundboard.globalVolume": "The overall volume when global sync is enabled.",
+
+  "option.opensoundboard.globalLocalVolume": "Global Local Volume",
+  "tooltip.opensoundboard.globalLocalVolume": "The volume of sounds played locally.",
+
+  "option.opensoundboard.globalPlayerVolume": "Global Player Volume",
+  "tooltip.opensoundboard.globalPlayerVolume": "The volume of sounds played to other players.",
+
+  "option.opensoundboard.singleSongAtATime": "Single Song At A Time",
+  "tooltip.opensoundboard.singleSongAtATime": "Stops currently playing sounds when a new one starts.",
+
+  "option.opensoundboard.loopAll": "Loop All",
+  "tooltip.opensoundboard.loopAll": "Loops all sounds indefinitely.",
+
+  "option.opensoundboard.skipAmount": "Skip Amount",
+  "tooltip.opensoundboard.skipAmount": "How many seconds to skip forward or backward.",
+
+  "option.opensoundboard.keybindMode": "Keybind Mode",
+  "tooltip.opensoundboard.keybindMode": "What happens when a keybind is pressed while a sound is playing.",
+  "option.opensoundboard.keybindMode.play_stop": "Play/Stop",
+  "option.opensoundboard.keybindMode.pause_resume": "Pause/Resume",
+  "option.opensoundboard.keybindMode.play_restart": "Restart",
+
+  "option.opensoundboard.showSubfolders": "Show Subfolders",
+  "tooltip.opensoundboard.showSubfolders": "Groups sounds by subfolder (depth 1). Folders can be collapsed.",
+
+  "gui.opensoundboard.sort.name": "Name",
+  "gui.opensoundboard.sort.date": "Date",
+  "gui.opensoundboard.sort.length": "Length",
+  "tooltip.opensoundboard.sortMode": "Cycle sort mode: Name → Date → Length",
+  "tooltip.opensoundboard.sortDir": "Toggle sort direction (ascending / descending)",
+
+  "gui.opensoundboard.title": "Soundboard",
+  "text.soundboard.title": "\u00a7f\u00a7lSoundboard",
+
+  "gui.opensoundboard.search_hint": "Search sounds...",
+  "gui.opensoundboard.select_hint": "Select a sound...",
+  "gui.opensoundboard.settings_for": "Settings for %s",
+
+  "gui.opensoundboard.stop_all": "Stop All",
+  "gui.opensoundboard.refresh": "Refresh",
+  "gui.opensoundboard.folder": "Folder",
+  "gui.opensoundboard.config": "Config",
+  "gui.opensoundboard.youtube": "YouTube",
+
+  "tooltip.opensoundboard.refresh": "Reload the sound list from disk",
+  "tooltip.opensoundboard.folder": "Open the sounds folder in your file explorer",
+  "tooltip.opensoundboard.config": "Open the configuration screen",
+  "tooltip.opensoundboard.youtube": "Download audio from YouTube",
+  "tooltip.opensoundboard.set_start": "Set the starting playback position for this sound",
+  "tooltip.opensoundboard.keybind": "Click to assign a keybind. Press Escape to remove.",
+
+  "gui.opensoundboard.play": "Play",
+  "gui.opensoundboard.stop": "Stop",
+
+  "gui.opensoundboard.skip_back": "Skip Back",
+  "gui.opensoundboard.pause_resume": "Pause / Resume",
+  "gui.opensoundboard.skip_forward": "Skip Forward",
+  "gui.opensoundboard.loop": "Loop",
+  "gui.opensoundboard.favorite": "Favorite",
+
+  "gui.opensoundboard.keybind.prefix": "Bind: ",
+  "gui.opensoundboard.keybind.none": "None",
+  "gui.opensoundboard.keybind.listening": "Listening...",
+
+  "gui.opensoundboard.local_volume": "Local Volume: %s",
+  "gui.opensoundboard.player_volume": "Player Volume: %s",
+  "gui.opensoundboard.sync_volume": "Volume: %s",
+
+  "gui.opensoundboard.set_start": "Set Start",
+
+  "gui.opensoundboard.youtube.title": "YouTube Downloader",
+  "gui.opensoundboard.youtube.url_hint": "Paste a YouTube link here...",
+  "gui.opensoundboard.youtube.audio_only": "Audio Only",
+  "gui.opensoundboard.youtube.download": "Download",
+  "gui.opensoundboard.youtube.cancel": "Cancel",
+  "gui.opensoundboard.youtube.save_folder": "Saving to: %s",
+
+  "message.opensoundboard.youtube.provide_url": "Please provide a valid URL.",
+  "message.opensoundboard.youtube.downloading": "Downloading...",
+  "message.opensoundboard.youtube.cancelled": "Cancelled.",
+  "message.opensoundboard.youtube.finished": "Finished.",
+  "message.opensoundboard.youtube.failed": "Download failed.",
+  "message.opensoundboard.youtube.timeout": "Download timed out.",
+  "message.opensoundboard.youtube.exit_code": "yt-dlp exited with an error.",
+
+  "message.opensoundboard.start_point_set": "Start point set for %s",
+  "message.opensoundboard.rename_failed": "Failed to rename: %s",
+  "message.opensoundboard.delete_failed": "Failed to delete: %s",
+
+  "gui.opensoundboard.rename": "Rename",
+  "gui.opensoundboard.rename_title": "Rename Sound",
+  "gui.opensoundboard.rename_confirm": "Rename",
+  "gui.opensoundboard.delete": "Delete",
+
+  "key.opensoundboard.wheel": "Sound Wheel",
+
+  "option.opensoundboard.wheel.header": "Sound Wheel",
+  "option.opensoundboard.wheelSoundsPerPage": "Sounds Per Page",
+  "tooltip.opensoundboard.wheelSoundsPerPage": "How many sounds to show per page in the sound wheel.",
+  "option.opensoundboard.wheelFavoritesOnly": "Favorites Only",
+  "tooltip.opensoundboard.wheelFavoritesOnly": "Only show favorited sounds in the sound wheel.",
+  "option.opensoundboard.wheelCustomLayout": "Custom Layout",
+  "tooltip.opensoundboard.wheelCustomLayout": "Assign specific sounds to each slot in the wheel instead of auto-filling.",
+  "gui.opensoundboard.wheel.editor.open": "Edit Wheel Layout",
+  "gui.opensoundboard.wheel.editor.title": "Wheel Layout Editor",
+  "gui.opensoundboard.wheel.editor.hint": "Click a slot",
+  "gui.opensoundboard.wheel.editor.empty_slot": "[ Empty ]",
+  "gui.opensoundboard.wheel.picker.title": "Pick a Sound",
+  "gui.opensoundboard.wheel.picker.clear": "Clear",
+  "gui.opensoundboard.wheel.picker.preview": "Preview this sound (first 1/3, up to 15s)",
+  "gui.opensoundboard.wheel.page": "Page %s / %s",
+  "gui.opensoundboard.wheel.empty": "No sounds found"
+}
