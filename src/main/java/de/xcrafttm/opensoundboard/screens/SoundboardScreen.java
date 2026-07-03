@@ -59,6 +59,7 @@ public class SoundboardScreen extends OsbScreen {
     private Slider timeline;
     private TextField timeField;
     private Button pauseBtn;
+    private Button loopBtn;
     private int detailsTop;
 
     private final List<Widget> details = new ArrayList<>();
@@ -74,7 +75,7 @@ public class SoundboardScreen extends OsbScreen {
     @Override
     protected void buildUi() {
         ph = (int) (this.height * 0.9);
-        pw = Math.max(420, (int) (this.width * 0.7));
+        pw = Math.max(420, (int) (this.width * 0.6));
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         cx = px + Theme.PAD;
@@ -115,7 +116,7 @@ public class SoundboardScreen extends OsbScreen {
 
         // Details block occupies a fixed strip at the bottom of the panel.
         int detailsH = 82;
-        detailsTop = py + ph - Theme.PAD - 22 - 6 - detailsH;
+        detailsTop = py + ph - Theme.PAD - detailsH;
         int listBottom = detailsTop - 14;
 
         list = add(new ScrollList().gap(2));
@@ -123,8 +124,8 @@ public class SoundboardScreen extends OsbScreen {
 
         buildDetails();
 
-        add(new Button(Component.translatable("gui.done"), b -> onClose()))
-                .bounds(px + (pw - 160) / 2, py + ph - Theme.PAD - 22, 160, 22);
+        add(new Button(Component.literal("✕"), b -> onClose()).secondary())
+                .bounds(px + pw - 22, py + 3, 18, 16).tooltip(tip("gui.done"));
 
         scanSounds();
         File active = SoundboardAudioSystem.getActiveSoundFile();
@@ -193,8 +194,9 @@ public class SoundboardScreen extends OsbScreen {
         pauseBtn.bounds(tb + (tbw + tbg) * 2, y, tbw, 18).tooltip(tip("gui.opensoundboard.pause_resume"));
         detail(new Button(Component.literal("⏩"), b -> skip(1)).secondary())
                 .bounds(tb + (tbw + tbg) * 3, y, tbw, 18).tooltip(tip("gui.opensoundboard.skip_forward"));
-        detail(new Button(Component.literal("🔁"), b -> toggleLoop()).secondary())
-                .bounds(tb + (tbw + tbg) * 4, y, tbw, 18).tooltip(tip("gui.opensoundboard.loop"));
+        loopBtn = detail(new Button(Component.literal("🔁"), b -> toggleLoop()).secondary());
+        loopBtn.bounds(tb + (tbw + tbg) * 4, y, tbw, 18);
+        loopBtn.tooltip(tip("gui.opensoundboard.loop"));
         detail(new Button(Component.literal("⚑ ").append(Component.translatable("gui.opensoundboard.set_start")), b -> setStart()).secondary())
                 .bounds(cx + cw - 84, y, 84, 18).tooltip(tip("tooltip.opensoundboard.set_start"));
     }
@@ -302,6 +304,16 @@ public class SoundboardScreen extends OsbScreen {
                     select(file);
                 }
                 return true;
+            }
+
+            public String tooltip(double mx, int rx, int rw) {
+                if (mx < rx + 3 + PLAY_W) {
+                    return Component.translatable(SoundboardAudioSystem.isPlaying(name) ? "gui.opensoundboard.stop" : "gui.opensoundboard.play").getString();
+                }
+                if (mx < rx + PLAY_W + 8 + STAR_W + 4) {
+                    return Component.translatable("gui.opensoundboard.favorite").getString();
+                }
+                return GuiTools.baseName(file);
             }
         };
     }
@@ -514,7 +526,8 @@ public class SoundboardScreen extends OsbScreen {
     @Override
     public void tick() {
         super.tick();
-        if (selected != null) refreshDetails();
+        if (loopBtn != null) loopBtn.setPrimary(SoundboardConfig.data.isLoopAll());
+        refreshDetails();
     }
 
     @Override

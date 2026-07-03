@@ -25,6 +25,11 @@ public abstract class Widget {
         return this;
     }
 
+    /** Tooltip text at the given point, or null. Containers override to descend into children. */
+    public String tooltipAt(double mx, double my) {
+        return contains(mx, my) ? tooltip : null;
+    }
+
     public Widget bounds(int x, int y, int w, int h) {
         this.x = x;
         this.y = y;

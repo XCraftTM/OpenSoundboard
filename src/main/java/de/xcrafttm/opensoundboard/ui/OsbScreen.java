@@ -73,16 +73,16 @@ public abstract class OsbScreen extends Screen {
     }
 
     private void drawTooltip(UiCanvas c) {
-        Widget hov = null;
+        String tip = null;
         for (int i = widgets.size() - 1; i >= 0; i--) {
             Widget w = widgets.get(i);
-            if (w.visible && w.tooltip != null && w.contains(c.mouseX, c.mouseY)) {
-                hov = w;
+            if (w.visible && w.contains(c.mouseX, c.mouseY)) {
+                tip = w.tooltipAt(c.mouseX, c.mouseY);
                 break;
             }
         }
-        if (hov == null) return;
-        String[] lines = hov.tooltip.split("\n");
+        if (tip == null) return;
+        String[] lines = tip.split("\n");
         int tw = 0;
         for (String ln : lines) tw = Math.max(tw, c.textWidth(ln));
         int pad = 4;

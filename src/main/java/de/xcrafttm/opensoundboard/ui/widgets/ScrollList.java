@@ -22,6 +22,10 @@ public class ScrollList extends Widget {
         default boolean click(double mx, double my, int rx, int ry, int rw, int button) {
             return false;
         }
+
+        default String tooltip(double mx, int rx, int rw) {
+            return null;
+        }
     }
 
     private final List<Row> rows = new ArrayList<>();
@@ -89,6 +93,18 @@ public class ScrollList extends Widget {
             c.fillRect(x + w - 3, y, 3, h, 0x33FFFFFF);
             c.fillRect(x + w - 3, barY, 3, barH, Theme.ACCENT);
         }
+    }
+
+    @Override
+    public String tooltipAt(double mx, double my) {
+        if (!contains(mx, my)) return null;
+        int ry = y - scroll;
+        for (Row r : rows) {
+            int rh = r.height();
+            if (my >= ry && my < ry + rh && my >= y && my < y + h) return r.tooltip(mx, x, w);
+            ry += rh + rowGap;
+        }
+        return null;
     }
 
     @Override

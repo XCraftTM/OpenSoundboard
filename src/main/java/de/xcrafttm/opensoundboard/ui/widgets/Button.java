@@ -27,6 +27,12 @@ public class Button extends Widget {
         return this;
     }
 
+    /** Toggle the filled/accent look at runtime (used as an on/off state indicator). */
+    public Button setPrimary(boolean primary) {
+        this.primary = primary;
+        return this;
+    }
+
     public void setLabel(Component label) {
         this.label = label;
     }

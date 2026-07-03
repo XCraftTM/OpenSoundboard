@@ -39,15 +39,14 @@ public class SoundboardConfigScreen extends OsbScreen {
     @Override
     protected void buildUi() {
         ph = (int) (this.height * 0.9);
-        pw = Math.max(400, (int) (this.width * 0.7));
+        pw = Math.max(400, (int) (this.width * 0.6));
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         int cx = px + Theme.PAD;
         int cw = pw - Theme.PAD * 2;
-        int doneY = py + ph - Theme.PAD - 22;
 
         panel = add(new ScrollPanel());
-        panel.bounds(cx, py + 26, cw, doneY - 6 - (py + 26));
+        panel.bounds(cx, py + 26, cw, (py + ph - Theme.PAD) - (py + 26));
 
         int w = cw - 8;
         int[] y = {2};
@@ -125,27 +124,31 @@ public class SoundboardConfigScreen extends OsbScreen {
         edit.active = SoundboardConfig.data.isWheelCustomLayout();
         y[0] += 24;
 
-        int half = (cw - 6) / 2;
-        add(new Button(Component.translatable("gui.done"), b -> done())).bounds(cx, doneY, half, 22);
-        add(new Button(Component.translatable("gui.cancel"), b -> this.minecraft.setScreen(parent)).secondary())
-                .bounds(cx + half + 6, doneY, cw - half - 6, 22);
+        add(new Button(Component.literal("✕"), b -> done()).secondary())
+                .bounds(px + pw - 22, py + 3, 18, 16).tooltip(Component.translatable("gui.done").getString());
 
         panel.setScroll(savedScroll);
     }
 
     private void toggle(int[] y, int w, String key, boolean value, Consumer<Boolean> onChange) {
-        panel.addChild(new Toggle(value, onChange), 0, y[0], 30, 16);
-        panel.addChild(new Label(Component.translatable(key).getString()), 38, y[0] + 4, w - 38, 10);
+        String tt = tip(key);
+        panel.addChild(new Toggle(value, onChange).tooltip(tt), 0, y[0], 30, 16);
+        panel.addChild(new Label(Component.translatable(key).getString()).tooltip(tt), 38, y[0] + 4, w - 38, 10);
         y[0] += 24;
     }
 
     private void cycle(int[] y, int w, String key, Supplier<Component> value, Runnable onCycle) {
+        String tt = tip(key);
         panel.addChild(new Button(value.get(), btn -> {
             onCycle.run();
             btn.setLabel(value.get());
-        }).secondary(), 0, y[0], 70, 16);
-        panel.addChild(new Label(Component.translatable(key).getString()), 78, y[0] + 4, w - 78, 10);
+        }).secondary().tooltip(tt), 0, y[0], 70, 16);
+        panel.addChild(new Label(Component.translatable(key).getString()).tooltip(tt), 78, y[0] + 4, w - 78, 10);
         y[0] += 24;
+    }
+
+    private static String tip(String optionKey) {
+        return Component.translatable(optionKey.replace("option.", "tooltip.")).getString();
     }
 
     private void volume(int[] y, int w, String key, float value, Consumer<Float> onChange) {

@@ -82,6 +82,17 @@ public class ScrollPanel extends Widget {
     }
 
     @Override
+    public String tooltipAt(double mx, double my) {
+        if (my < y || my >= y + h) return null;
+        layout();
+        for (int i = children.size() - 1; i >= 0; i--) {
+            Widget ch = children.get(i);
+            if (ch.visible && ch.contains(mx, my)) return ch.tooltipAt(mx, my);
+        }
+        return null;
+    }
+
+    @Override
     public boolean mouseScrolled(double mx, double my, double amount) {
         int ms = maxScroll();
         if (ms <= 0) return false;

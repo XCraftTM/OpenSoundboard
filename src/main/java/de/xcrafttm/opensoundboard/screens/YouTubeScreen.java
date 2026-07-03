@@ -44,7 +44,7 @@ public class YouTubeScreen extends OsbScreen {
     @Override
     protected void buildUi() {
         ph = (int) (this.height * 0.9);
-        pw = Math.max(460, (int) (this.width * 0.7));
+        pw = Math.max(460, (int) (this.width * 0.6));
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         int cx = px + Theme.PAD;
@@ -64,14 +64,13 @@ public class YouTubeScreen extends OsbScreen {
 
         barY = y - 5;
         y += 4;
-        int doneY = py + ph - Theme.PAD - 22;
-        int saveY = doneY - 14;
+        int saveY = py + ph - Theme.PAD - 10;
         log = add(new ScrollList().gap(1));
-        log.bounds(cx, y, cw, saveY - 6 - y);
+        log.bounds(cx, y, cw, saveY - 4 - y);
         addLog("> Waiting for Command...");
 
-        add(new Button(Component.translatable("gui.done"), b -> this.minecraft.setScreen(parent)))
-                .bounds(px + (pw - 160) / 2, doneY, 160, 22);
+        add(new Button(Component.literal("✕"), b -> this.minecraft.setScreen(parent)).secondary())
+                .bounds(px + pw - 22, py + 3, 18, 16).tooltip(Component.translatable("gui.done").getString());
     }
 
     private Component downloadLabel() {
@@ -157,7 +156,7 @@ public class YouTubeScreen extends OsbScreen {
         if (fill > 0) c.fillRoundRect(cx, barY, fill, 4, Theme.ACCENT);
 
         c.text(Component.translatable("gui.opensoundboard.youtube.save_folder", OpenSoundboardClient.soundDir.getName()).getString(),
-                cx, py + ph - Theme.PAD - 22 - 12, Theme.TEXT_MUTED);
+                cx, py + ph - Theme.PAD - 8, Theme.TEXT_MUTED);
     }
 
     @Override
