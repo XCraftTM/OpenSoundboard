@@ -1,5 +1,7 @@
 package de.xcrafttm.opensoundboard.platform;
 
+import java.util.Objects;
+
 public final class PlatformBootstrap {
 
     private static PlatformClient client;
@@ -7,7 +9,7 @@ public final class PlatformBootstrap {
     private PlatformBootstrap() {}
 
     public static void setClient(PlatformClient platformClient) {
-        client = platformClient;
+        client = Objects.requireNonNull(platformClient, "platformClient");
     }
 
     public static PlatformClient client() {

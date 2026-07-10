@@ -5,7 +5,7 @@ import com.google.gson.GsonBuilder;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import net.fabricmc.loader.api.FabricLoader;
+import de.xcrafttm.opensoundboard.platform.PlatformBootstrap;
 
 import java.io.File;
 import java.io.FileReader;
@@ -15,7 +15,7 @@ import java.io.IOException;
 @Data
 public class SoundboardConfig {
 
-    private static final File BASE_DIR = new File(FabricLoader.getInstance().getConfigDir().toFile(), "opensoundboard");
+    private static final File BASE_DIR = new File(PlatformBootstrap.client().configDirectory(), "opensoundboard");
 
     /**
      * Global options

@@ -2,6 +2,7 @@ package de.xcrafttm.opensoundboard;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
+import de.xcrafttm.opensoundboard.platform.PlatformBootstrap;
 import de.xcrafttm.opensoundboard.screens.SoundWheelOverlay;
 import de.xcrafttm.opensoundboard.screens.SoundboardScreen;
 import de.xcrafttm.opensoundboard.tools.KeybindHandler;
@@ -33,6 +34,8 @@ public class OpenSoundboardClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        PlatformBootstrap.setClient(() -> FabricLoader.getInstance().getConfigDir().toFile());
+
         if (!soundDir.exists()) {
             soundDir.mkdirs();
         }

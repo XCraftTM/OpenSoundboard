@@ -7,11 +7,13 @@ plugins {
 // "build", "runClient", etc. tasks on each version node (:1.21.1, :1.21.11, :26.1.2).
 stonecutter active file("versions/active.txt")
 
-// Every Minecraft version the mod is built for (the Stonecutter anchor nodes). Ordered so the
-// last build leaves the tree on the 26.x node; buildAllJars resets to the dev default at the end.
-val supportedVersions = listOf("1.21.1", "1.21.11", "26.1.2")
-val devVersion = "1.21.11" // vcsVersion / dev default the tree is reset to after a full build
+// Single source of truth for the Stonecutter anchor nodes, shared with settings.gradle.kts.
+val supportedVersions = file("versions/supported.txt").readLines()
+    .map(String::trim)
+    .filter(String::isNotEmpty)
 val projectRoot = rootDir
+val activeVersionFile = projectRoot.resolve("versions/active.txt")
+val nestedLogFile = projectRoot.resolve("build/nested-gradle.log")
 
 // Spawn a fresh Gradle invocation and fail the calling task on a non-zero exit. A subprocess is
 // required whenever the active version must change between steps: the active version selects the
@@ -25,18 +27,21 @@ fun gradlew(vararg args: String) {
         listOf("cmd", "/c", projectRoot.resolve("gradlew.bat").absolutePath)
     else
         listOf(projectRoot.resolve("gradlew").absolutePath)
-    val logFile = projectRoot.resolve("build/nested-gradle.log")
-    logFile.parentFile.mkdirs()
+    nestedLogFile.parentFile.mkdirs()
+    nestedLogFile.appendText(
+        "${System.lineSeparator()}>>> gradlew ${args.joinToString(" ")}${System.lineSeparator()}"
+    )
+    logger.lifecycle("Nested Gradle: ${args.joinToString(" ")}")
     val pb = ProcessBuilder(launcher + args.toList())
         .directory(projectRoot)
         .redirectErrorStream(true)
-        .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile))
+        .redirectOutput(ProcessBuilder.Redirect.appendTo(nestedLogFile))
     // The spawned launcher must find a JDK; the daemon's ambient env may not carry JAVA_HOME,
     // so pin it to the JVM this build is already running on (Java 25 when invoked for 26.x).
     pb.environment()["JAVA_HOME"] = System.getProperty("java.home")
     val exit = pb.start().waitFor()
     if (exit != 0) throw GradleException(
-        "`gradlew ${args.joinToString(" ")}` failed (exit $exit); see build/nested-gradle.log"
+        "`gradlew ${args.joinToString(" ")}` failed (exit $exit); see ${nestedLogFile.relativeTo(projectRoot)}"
     )
 }
 
@@ -49,7 +54,10 @@ supportedVersions.forEach { id ->
         group = "opensoundboard"
         description = "Switch active to $id and run its Minecraft client"
         dependsOn("Set active project to $id")
-        doLast { gradlew(":$id:runClient") }
+        doLast {
+            nestedLogFile.writeText("")
+            gradlew(":$id:runClient")
+        }
     }
 }
 
@@ -63,20 +71,69 @@ tasks.register("buildAllJars") {
     description = "Build every supported version and collect release jars into build/jars/"
     doLast {
         val outDir = projectRoot.resolve("build/jars")
-        outDir.mkdirs()
-        outDir.listFiles()?.filter { it.extension == "jar" }?.forEach { it.delete() }
-        supportedVersions.forEach { v ->
-            // Use the space-free switch alias: a spaced task name ("Set active project to X")
-            // gets split into separate task tokens when passed through cmd /c on Windows.
-            gradlew("stonecutterSwitchTo$v")
-            // Clean the node first: Stonecutter's per-node compileJava can go falsely UP-TO-DATE
-            // across version switches and package stale classes, so force a fresh compile.
-            gradlew(":$v:clean", ":$v:build")
-            projectRoot.resolve("versions/$v/build/libs").listFiles()
-                ?.filter { it.name.endsWith(".jar") && !it.name.endsWith("-sources.jar") }
-                ?.forEach { it.copyTo(outDir.resolve(it.name), overwrite = true) }
+        val stagingDir = projectRoot.resolve("build/jars-staging")
+        val originalVersion = activeVersionFile.readText().trim()
+        require(originalVersion in supportedVersions) {
+            "Unsupported active Stonecutter version '$originalVersion'"
         }
-        gradlew("stonecutterSwitchTo$devVersion") // reset to the dev default
+
+        delete(stagingDir)
+        check(stagingDir.mkdirs()) { "Could not create $stagingDir" }
+        nestedLogFile.writeText("")
+
+        var buildFailure: Throwable? = null
+        try {
+            supportedVersions.forEach { v ->
+                // Use the space-free switch alias: a spaced task name ("Set active project to X")
+                // gets split into separate task tokens when passed through cmd /c on Windows.
+                gradlew("stonecutterSwitchTo$v")
+                // Clean the node first: Stonecutter's per-node compileJava can go falsely
+                // UP-TO-DATE across switches and package stale classes.
+                gradlew(":$v:clean", ":$v:build")
+
+                val releaseJars = projectRoot.resolve("versions/$v/build/libs").listFiles()
+                    ?.filter { it.extension == "jar" && !it.name.endsWith("-sources.jar") }
+                    .orEmpty()
+                if (releaseJars.size != 1) {
+                    throw GradleException(
+                        "Expected exactly one release jar for $v, found ${releaseJars.size}: " +
+                            releaseJars.joinToString { it.name }
+                    )
+                }
+                releaseJars.single().copyTo(
+                    stagingDir.resolve(releaseJars.single().name),
+                    overwrite = true
+                )
+            }
+        } catch (failure: Throwable) {
+            buildFailure = failure
+            delete(stagingDir)
+            throw failure
+        } finally {
+            if (activeVersionFile.readText().trim() != originalVersion) {
+                try {
+                    gradlew("stonecutterSwitchTo$originalVersion")
+                } catch (resetFailure: Throwable) {
+                    delete(stagingDir)
+                    buildFailure?.addSuppressed(resetFailure) ?: throw resetFailure
+                }
+            }
+        }
+
+        // Keep the last known-good output untouched until every version has built and validated.
+        sync {
+            from(stagingDir)
+            into(outDir)
+        }
+        delete(stagingDir)
         logger.lifecycle("Release jars collected into build/jars/")
     }
+}
+
+// Expose the conventional root task in task listings. settings.gradle.kts routes a bare
+// `gradlew build` directly to buildAllJars before Gradle expands it to all version nodes.
+tasks.register("build") {
+    group = "build"
+    description = "Build all supported Minecraft versions via Stonecutter"
+    dependsOn("buildAllJars")
 }

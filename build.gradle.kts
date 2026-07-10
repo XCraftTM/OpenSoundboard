@@ -6,7 +6,6 @@ import java.util.Properties
 plugins {
     id("net.fabricmc.fabric-loom") apply false
     id("net.fabricmc.fabric-loom-remap") apply false
-    id("maven-publish")
     id("com.modrinth.minotaur") version "2.8.7"
 }
 
@@ -20,9 +19,12 @@ fun vprop(name: String): String = vprops.getProperty(name)
 fun vpropOrNull(name: String): String? = vprops.getProperty(name)?.takeIf { it.isNotBlank() }
 
 val mcVersion = vprop("minecraft.version")
-// Legacy releases (1.21.x) ship obfuscated -> loom-remap + Mojang mappings.
-// Year-versioned releases (26.x) ship deobfuscated -> plain loom, no mappings.
-val isLegacyObfuscated = mcVersion.startsWith("1.")
+// Explicit per-version switch: version naming conventions are not a reliable obfuscation signal.
+val isLegacyObfuscated = vprop("minecraft.obfuscated").toBooleanStrict()
+val publishedGameVersions = (vpropOrNull("modrinth.game.versions") ?: mcVersion)
+    .split(',')
+    .map(String::trim)
+    .filter(String::isNotEmpty)
 
 if (isLegacyObfuscated) apply(plugin = "net.fabricmc.fabric-loom-remap")
 else apply(plugin = "net.fabricmc.fabric-loom")
@@ -68,10 +70,12 @@ dependencies {
         "modImplementation"("net.fabricmc.fabric-api:fabric-api:${vprop("fabric.api.version")}")
         // Simple Voice Chat mod (runtime; remapped by loom on obfuscated targets). Skipped if unset.
         vpropOrNull("voicechat.version")?.let { "modRuntimeOnly"("maven.modrinth:simple-voice-chat:fabric-$it") }
+        "modImplementation"("com.terraformersmc:modmenu:${vprop("modmenu.version")}")
     } else {
         "implementation"("net.fabricmc:fabric-loader:${vprop("fabric.loader.version")}")
         "implementation"("net.fabricmc.fabric-api:fabric-api:${vprop("fabric.api.version")}")
         vpropOrNull("voicechat.version")?.let { "runtimeOnly"("maven.modrinth:simple-voice-chat:fabric-$it") }
+        "implementation"("com.terraformersmc:modmenu:${vprop("modmenu.version")}")
     }
 
     // Pure, mapping-neutral shared code (config models, platform interfaces).
@@ -85,24 +89,39 @@ dependencies {
 tasks.processResources {
     val replacements = mapOf(
         "version" to version.toString(),
-        "minecraftVersion" to mcVersion,
+        "minecraftDependency" to vprop("minecraft.dependency"),
+        "javaVersion" to vprop("java.version"),
+        "fabricLoaderVersion" to vprop("fabric.loader.version"),
+        "fabricApiVersion" to vprop("fabric.api.version"),
+        "voicechatVersion" to vprop("voicechat.version"),
+        "modmenuVersion" to vprop("modmenu.version"),
     )
     inputs.properties(replacements)
     filesMatching("fabric.mod.json") { expand(replacements) }
 }
 
-// Bundle the pure :common classes (config models, platform interfaces) into the mod jar.
+// Bundle only the :common classes into the mod jar. Resources live in the versioned root source set.
 // They are on the classpath in dev via project(":common"), but Loom does not package a plain
 // `implementation` subproject, so an installed jar hit NoClassDefFoundError for
 // de.xcrafttm.opensoundboard.config.SoundboardConfig. remapJar (legacy) remaps the jar output;
 // these classes have no Minecraft references so they pass through unchanged.
 evaluationDependsOn(":common")
-val commonMainOutput = project(":common")
+val commonMainSourceSet = project(":common")
     .extensions.getByType(SourceSetContainer::class.java)
-    .getByName("main").output
+    .getByName("main")
 tasks.named<Jar>("jar") {
-    from(commonMainOutput)
+    dependsOn(project(":common").tasks.named("classes"))
+    from(commonMainSourceSet.output.classesDirs)
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+tasks.named<Jar>("sourcesJar") {
+    from(commonMainSourceSet.allJava)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.withType<AbstractArchiveTask>().configureEach {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +145,7 @@ modrinth {
             ?: "Full changelog: https://github.com/XCraftTM/OpenSoundboard/releases/tag/v${rootProject.property("mod_version")}"
     )
     uploadFile.set(tasks.named(if (isLegacyObfuscated) "remapJar" else "jar"))
-    gameVersions.set((vpropOrNull("modrinth.game.versions") ?: mcVersion).split(",").map { it.trim() })
+    gameVersions.set(publishedGameVersions)
     loaders.set(listOf("fabric"))
     dependencies {
         required.project("fabric-api")

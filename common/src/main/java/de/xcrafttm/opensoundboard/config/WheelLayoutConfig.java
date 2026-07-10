@@ -2,7 +2,7 @@ package de.xcrafttm.opensoundboard.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import net.fabricmc.loader.api.FabricLoader;
+import de.xcrafttm.opensoundboard.platform.PlatformBootstrap;
 
 import java.io.File;
 import java.io.FileReader;
@@ -18,7 +18,7 @@ import java.util.List;
  */
 public class WheelLayoutConfig {
 
-    private static final File BASE_DIR  = new File(FabricLoader.getInstance().getConfigDir().toFile(), "opensoundboard");
+    private static final File BASE_DIR  = new File(PlatformBootstrap.client().configDirectory(), "opensoundboard");
     private static final File FILE      = new File(BASE_DIR, "wheel_layout.json");
     private static final Gson GSON      = new GsonBuilder().setPrettyPrinting().create();
 

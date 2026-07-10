@@ -2,19 +2,9 @@ package de.xcrafttm.opensoundboard.platform;
 
 import java.io.File;
 
-/**
- * Small abstraction layer so common logic doesn't directly depend on MC classes.
- */
+/** Supplies the one platform-specific path needed by the mapping-neutral config module. */
 public interface PlatformClient {
 
-    File soundDirectory();
-
     File configDirectory();
-
-    void openFile(File file);
-
-    void openFolder(File folder);
-
-    void runOnClientThread(Runnable runnable);
 }
 

@@ -80,8 +80,13 @@
 
 The project uses [Stonecutter](https://stonecutter.kikugie.dev/) to build every supported Minecraft version from a single source tree.
 
+See the [Stonecutter Development Guide](STONECUTTER.md) for version switching, single-version builds, full release builds, client launch tasks, and troubleshooting.
+
 ```bash
-# Build every supported version and collect the jars into build/jars/
+# `build` delegates to the Stonecutter multi-version build and collects build/jars/
+JAVA_HOME=<jdk-25> ./gradlew build
+
+# Equivalent explicit task
 JAVA_HOME=<jdk-25> ./gradlew buildAllJars
 ```
 
@@ -95,7 +100,7 @@ To work on a single version, switch the active version first, then build or run 
 ./gradlew client_26_1_2               # switch + launch its client
 ```
 
-> Minecraft 26.x builds require the Gradle daemon to run on Java 25 (set `JAVA_HOME` accordingly); 1.21.x versions target Java 21 but build fine on a Java 25 daemon too. A plain `./gradlew build` won't work — it tries to build every version as the active one, which breaks across the 1.21.x/26.x boundary.
+> Minecraft 26.x builds require the Gradle daemon to run on Java 25 (set `JAVA_HOME` accordingly); 1.21.x versions target Java 21 but build fine on a Java 25 daemon too. The root `build` task delegates to the isolated Stonecutter builds; use a fully qualified task such as `:1.21.11:build` when working on only the active version.
 
 ## Credits
 

@@ -18,15 +18,22 @@
     "client": [
       "de.xcrafttm.opensoundboard.OpenSoundboardClient"
     ],
+    "modmenu": [
+      "de.xcrafttm.opensoundboard.integration.ModMenuIntegration"
+    ],
     "voicechat": [
       "de.xcrafttm.opensoundboard.integration.SoundboardPlugin"
     ]
   },
 
   "depends": {
-    "fabricloader": ">=0.16.0",
-    "fabric-api": "*",
-    "minecraft": "*",
-    "voicechat": "*"
+    "fabricloader": ">=${fabricLoaderVersion}",
+    "fabric-api": ">=${fabricApiVersion}",
+    "minecraft": "${minecraftDependency}",
+    "java": ">=${javaVersion}",
+    "voicechat": ">=${voicechatVersion}"
+  },
+  "suggests": {
+    "modmenu": ">=${modmenuVersion}"
   }
 }

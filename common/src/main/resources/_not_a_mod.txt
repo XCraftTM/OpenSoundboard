@@ -1,2 +1,0 @@
-This module (:common) is a plain library and must not contain a fabric.mod.json.
-
