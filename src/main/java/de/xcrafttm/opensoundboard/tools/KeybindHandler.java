@@ -20,7 +20,7 @@ public final class KeybindHandler {
     }
 
     public static void tick(Minecraft client, File soundDir) {
-        if (client.screen != null || client.getWindow() == null) {
+        if (McCompat.screen(client) != null || client.getWindow() == null) {
             heldKeybinds.clear();
             return;
         }

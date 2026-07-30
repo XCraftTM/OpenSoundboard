@@ -102,11 +102,11 @@ public class SoundboardScreen extends OsbScreen {
                 .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.folder"));
         bx += unit + gap;
         add(new Button(icon("⚙", "gui.opensoundboard.config"),
-                b -> this.minecraft.setScreen(new SoundboardConfigScreen(this))).secondary())
+                b -> McCompat.setScreen(this.minecraft, new SoundboardConfigScreen(this))).secondary())
                 .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.config"));
         bx += unit + gap;
         add(new Button(icon("⬇", "gui.opensoundboard.youtube"),
-                b -> this.minecraft.setScreen(new YouTubeScreen(this))).secondary())
+                b -> McCompat.setScreen(this.minecraft, new YouTubeScreen(this))).secondary())
                 .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.youtube"));
         bx += unit + gap;
         sortBtn = add(new SplitButton(0.25f, sortDirLabel(), this::toggleSortDir, sortModeLabel(), this::cycleSortMode));

@@ -54,7 +54,8 @@
 
 | Minecraft              | Status                |
 |------------------------|-----------------------|
-| 26.1, 26.1.1, 26.1.2   | ✅ Supported (latest)  |
+| 26.2                   | ✅ Supported (latest)  |
+| 26.1, 26.1.1, 26.1.2  | ✅ Supported           |
 | 1.21.11                | ✅ Supported           |
 | 1.21, 1.21.1           | ✅ Supported           |
 | 1.21.10, 1.21.8, 1.21.5, 1.21.4 | ⚠️ Deprecated |
@@ -90,14 +91,14 @@ JAVA_HOME=<jdk-25> ./gradlew build
 JAVA_HOME=<jdk-25> ./gradlew buildAllJars
 ```
 
-The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.3.0+mc26.1.2.jar`. (Each is also left in `versions/<version>/build/libs/`.)
+The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.3.0+mc26.2.jar`. (Each is also left in `versions/<version>/build/libs/`.)
 
 To work on a single version, switch the active version first, then build or run just that node:
 
 ```bash
-./gradlew stonecutterSwitchTo26.1.2   # pick the active version
-./gradlew :26.1.2:build               # build just that node -> versions/26.1.2/build/libs/
-./gradlew client_26_1_2               # switch + launch its client
+./gradlew stonecutterSwitchTo26.2   # pick the active version
+./gradlew :26.2:build               # build just that node -> versions/26.2/build/libs/
+./gradlew client_26_2               # switch + launch its client
 ```
 
 > Minecraft 26.x builds require the Gradle daemon to run on Java 25 (set `JAVA_HOME` accordingly); 1.21.x versions target Java 21 but build fine on a Java 25 daemon too. The root `build` task delegates to the isolated Stonecutter builds; use a fully qualified task such as `:1.21.11:build` when working on only the active version.

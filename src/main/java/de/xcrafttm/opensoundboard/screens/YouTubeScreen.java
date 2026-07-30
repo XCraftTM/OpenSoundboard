@@ -69,7 +69,7 @@ public class YouTubeScreen extends OsbScreen {
         log.bounds(cx, y, cw, saveY - 4 - y);
         addLog("> Waiting for Command...");
 
-        add(new Button(Component.literal("✕"), b -> this.minecraft.setScreen(parent)).secondary())
+        add(new Button(Component.literal("✕"), b -> McCompat.setScreen(this.minecraft, parent)).secondary())
                 .bounds(px + pw - 22, py + 3, 18, 16).tooltip(Component.translatable("gui.done").getString());
     }
 

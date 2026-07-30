@@ -4,7 +4,7 @@ plugins {
 
 // Active version is tracked in versions/active.txt so settings.gradle.kts pluginManagement
 // can read it before the controller is configured. Stonecutter registers per-version
-// "build", "runClient", etc. tasks on each version node (:1.21.1, :1.21.11, :26.1.2).
+// "build", "runClient", etc. tasks on every node listed in versions/supported.txt.
 stonecutter active file("versions/active.txt")
 
 // Single source of truth for the Stonecutter anchor nodes, shared with settings.gradle.kts.

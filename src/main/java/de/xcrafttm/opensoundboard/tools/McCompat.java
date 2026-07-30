@@ -1,6 +1,7 @@
 package de.xcrafttm.opensoundboard.tools;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 
 /**
  * Small cross-version helpers that hide Mojang-mapping renames, so the rest of the code
@@ -18,6 +19,24 @@ public final class McCompat {
         //?} else {
         /*return client.getWindow().getWindow();
         *///?}
+    }
+
+    /** Current screen. Minecraft 26.2 moved screen ownership from Minecraft to Gui. */
+    public static Screen screen(Minecraft client) {
+        //? if >=26.2 {
+        /*return client.gui.screen();
+        *///?} else {
+        return client.screen;
+        //?}
+    }
+
+    /** Change the current screen. Minecraft 26.2 moved screen ownership from Minecraft to Gui. */
+    public static void setScreen(Minecraft client, Screen screen) {
+        //? if >=26.2 {
+        /*client.gui.setScreen(screen);
+        *///?} else {
+        client.setScreen(screen);
+        //?}
     }
 
     /** Open a folder in the OS file explorer. Util moved from net.minecraft.Util to net.minecraft.util.Util. */

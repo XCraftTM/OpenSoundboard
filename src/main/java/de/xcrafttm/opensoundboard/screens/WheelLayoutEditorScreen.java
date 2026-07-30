@@ -4,6 +4,7 @@ import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.config.WheelLayoutConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
+import de.xcrafttm.opensoundboard.tools.McCompat;
 import de.xcrafttm.opensoundboard.tools.WheelLayout;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
@@ -44,7 +45,7 @@ public class WheelLayoutEditorScreen extends OsbScreen {
             if (assigned != null && !assigned.isBlank()) b.tooltip(GuiTools.baseName(new File(OpenSoundboardClient.soundDir, assigned)));
         }
 
-        add(new Button(Component.literal("✕"), btn -> this.minecraft.setScreen(parent)).secondary())
+        add(new Button(Component.literal("✕"), btn -> McCompat.setScreen(this.minecraft, parent)).secondary())
                 .bounds(this.width - 24, 4, 18, 16).tooltip(Component.translatable("gui.done").getString());
     }
 
@@ -58,7 +59,7 @@ public class WheelLayoutEditorScreen extends OsbScreen {
     }
 
     private void openPicker(int slot) {
-        this.minecraft.setScreen(new SongPickerScreen(this, name -> {
+        McCompat.setScreen(this.minecraft, new SongPickerScreen(this, name -> {
             WheelLayoutConfig.set(slot, name);
             WheelLayoutConfig.save();
         }));
@@ -76,7 +77,7 @@ public class WheelLayoutEditorScreen extends OsbScreen {
 
     @Override
     public void onClose() {
-        this.minecraft.setScreen(parent);
+        McCompat.setScreen(this.minecraft, parent);
     }
 
     @Override

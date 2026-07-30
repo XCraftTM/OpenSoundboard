@@ -3,6 +3,7 @@ package de.xcrafttm.opensoundboard.screens;
 import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
+import de.xcrafttm.opensoundboard.tools.McCompat;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
@@ -163,12 +164,12 @@ public class SongPickerScreen extends OsbScreen {
     private void pick(String fileName) {
         stopPreview();
         onPick.accept(fileName);
-        this.minecraft.setScreen(parent);
+        McCompat.setScreen(this.minecraft, parent);
     }
 
     private void closeWithoutPick() {
         stopPreview();
-        this.minecraft.setScreen(parent);
+        McCompat.setScreen(this.minecraft, parent);
     }
 
     @Override

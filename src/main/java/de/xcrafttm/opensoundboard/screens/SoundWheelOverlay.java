@@ -4,6 +4,7 @@ import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.config.WheelLayoutConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
+import de.xcrafttm.opensoundboard.tools.McCompat;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import de.xcrafttm.opensoundboard.tools.WheelLayout;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
@@ -266,7 +267,7 @@ public class SoundWheelOverlay extends OsbScreen {
     }
 
     private void close() {
-        this.minecraft.setScreen(null);
+        McCompat.setScreen(this.minecraft, null);
     }
 
     @Override

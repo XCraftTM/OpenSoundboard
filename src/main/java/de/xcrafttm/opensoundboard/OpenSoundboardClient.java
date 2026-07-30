@@ -67,7 +67,7 @@ public class OpenSoundboardClient implements ClientModInitializer {
             KeybindHandler.tick(client, soundDir);
 
             while (openKey.consumeClick()) {
-                client.setScreen(new SoundboardScreen());
+                McCompat.setScreen(client, new SoundboardScreen());
             }
 
             // Poll the wheel key's bound key directly so we can detect hold while the overlay is open.
@@ -79,9 +79,9 @@ public class OpenSoundboardClient implements ClientModInitializer {
                     ? GLFW.glfwGetMouseButton(window, wheelCode) == GLFW.GLFW_PRESS
                     : GLFW.glfwGetKey(window, wheelCode) == GLFW.GLFW_PRESS);
 
-            if (client.screen == null && wheelHeld) {
-                client.setScreen(new SoundWheelOverlay());
-            } else if (client.screen instanceof SoundWheelOverlay overlay && !wheelHeld) {
+            if (McCompat.screen(client) == null && wheelHeld) {
+                McCompat.setScreen(client, new SoundWheelOverlay());
+            } else if (McCompat.screen(client) instanceof SoundWheelOverlay overlay && !wheelHeld) {
                 overlay.playHoveredAndClose();
             }
         });

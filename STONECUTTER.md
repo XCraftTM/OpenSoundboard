@@ -7,6 +7,7 @@ Currently supported build targets are listed in [`versions/supported.txt`](versi
 - Minecraft 1.21.1
 - Minecraft 1.21.11
 - Minecraft 26.1.2
+- Minecraft 26.2
 
 ## Requirements
 
@@ -59,6 +60,7 @@ PowerShell or Command Prompt:
 .\gradlew.bat stonecutterSwitchTo1.21.1
 .\gradlew.bat stonecutterSwitchTo1.21.11
 .\gradlew.bat stonecutterSwitchTo26.1.2
+.\gradlew.bat stonecutterSwitchTo26.2
 ```
 
 Linux or macOS:
@@ -67,6 +69,7 @@ Linux or macOS:
 ./gradlew stonecutterSwitchTo1.21.1
 ./gradlew stonecutterSwitchTo1.21.11
 ./gradlew stonecutterSwitchTo26.1.2
+./gradlew stonecutterSwitchTo26.2
 ```
 
 After switching, IDE imports, Minecraft dependencies, mappings, and Stonecutter conditions correspond to that active version.
@@ -82,12 +85,12 @@ Example for Minecraft 1.21.11 on Windows:
 .\gradlew.bat :1.21.11:build
 ```
 
-Example for Minecraft 26.1.2 on Linux or macOS:
+Example for Minecraft 26.2 on Linux or macOS:
 
 ```bash
 export JAVA_HOME=/path/to/jdk-25
-./gradlew stonecutterSwitchTo26.1.2
-./gradlew :26.1.2:build
+./gradlew stonecutterSwitchTo26.2
+./gradlew :26.2:build
 ```
 
 The resulting files are written to:
@@ -102,7 +105,7 @@ For a completely clean single-version build:
 .\gradlew.bat :1.21.11:clean :1.21.11:build
 ```
 
-The selected project path must match the active version. For example, do not switch to `1.21.11` and then run `:26.1.2:build`.
+The selected project path must match the active version. For example, do not switch to `1.21.11` and then run `:26.2:build`.
 
 ## Building Every Version
 
@@ -164,13 +167,14 @@ Convenience tasks switch to the requested version and launch its Minecraft clien
 .\gradlew.bat client_1_21_1
 .\gradlew.bat client_1_21_11
 .\gradlew.bat client_26_1_2
+.\gradlew.bat client_26_2
 ```
 
-Java 25 is required when launching the 26.1.2 client:
+Java 25 is required when launching a 26.x client:
 
 ```powershell
 $env:JAVA_HOME = "C:\Path\To\jdk-25"
-.\gradlew.bat client_26_1_2
+.\gradlew.bat client_26_2
 ```
 
 You can also switch manually and use the generated project task:
@@ -271,9 +275,11 @@ The full `buildAllJars` task already cleans every version automatically.
 | Task | Purpose |
 |---|---|
 | `stonecutterSwitchTo1.21.11` | Make Minecraft 1.21.11 active |
+| `stonecutterSwitchTo26.2` | Make Minecraft 26.2 active |
 | `:1.21.11:build` | Build only the active 1.21.11 project |
+| `:26.2:build` | Build only the active 26.2 project |
 | `:1.21.11:clean :1.21.11:build` | Clean and rebuild 1.21.11 |
 | `client_1_21_11` | Switch to 1.21.11 and launch its client |
+| `client_26_2` | Switch to 26.2 and launch its client |
 | `build` | Build and collect every supported version |
 | `buildAllJars` | Explicit name of the multi-version release build |
-

@@ -1,6 +1,7 @@
 package de.xcrafttm.opensoundboard.screens;
 
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
+import de.xcrafttm.opensoundboard.tools.McCompat;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
@@ -120,7 +121,7 @@ public class SoundboardConfigScreen extends OsbScreen {
                 SoundboardConfig.data.isWheelCustomLayout(), v -> { SoundboardConfig.data.setWheelCustomLayout(v); SoundboardConfig.save(); savedScroll = panel.getScroll(); rebuildUi(); });
 
         Button edit = panel.addChild(new Button(Component.translatable("gui.opensoundboard.wheel.editor.open"),
-                b -> this.minecraft.setScreen(new WheelLayoutEditorScreen(this))).secondary(), 0, y[0], w, 18);
+                b -> McCompat.setScreen(this.minecraft, new WheelLayoutEditorScreen(this))).secondary(), 0, y[0], w, 18);
         edit.active = SoundboardConfig.data.isWheelCustomLayout();
         y[0] += 24;
 
@@ -166,8 +167,8 @@ public class SoundboardConfigScreen extends OsbScreen {
     }
 
     private void done() {
-        if (parent instanceof SoundboardScreen) this.minecraft.setScreen(new SoundboardScreen());
-        else this.minecraft.setScreen(parent);
+        if (parent instanceof SoundboardScreen) McCompat.setScreen(this.minecraft, new SoundboardScreen());
+        else McCompat.setScreen(this.minecraft, parent);
     }
 
     @Override
