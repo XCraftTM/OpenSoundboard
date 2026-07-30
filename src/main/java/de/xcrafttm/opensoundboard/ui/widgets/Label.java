@@ -32,10 +32,11 @@ public class Label extends Widget {
 
     @Override
     public void draw(UiCanvas c) {
+        String visibleText = w > 0 ? c.trimText(text, w) : text;
         if (centered) {
-            c.centeredText(Component.literal(text), x + w / 2, y, color);
+            c.centeredText(Component.literal(visibleText), x + w / 2, y, color);
         } else {
-            c.text(text, x, y, color);
+            c.text(visibleText, x, y, color);
         }
     }
 }

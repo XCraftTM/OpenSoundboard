@@ -1,6 +1,5 @@
 package de.xcrafttm.opensoundboard.ui.widgets;
 
-import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
 import de.xcrafttm.opensoundboard.ui.Widget;
 
@@ -32,6 +31,7 @@ public class ScrollList extends Widget {
     private int scroll = 0;
     private int rowGap = 2;
     private int background = 0x66000000;
+    private final Scrollbar scrollbar = new Scrollbar();
 
     public ScrollList gap(int gap) {
         this.rowGap = gap;
@@ -85,14 +85,7 @@ public class ScrollList extends Widget {
         }
         c.popScissor();
 
-        int ms = maxScroll();
-        if (ms > 0) {
-            int content = contentHeight();
-            int barH = Math.max(20, (int) ((long) h * h / content));
-            int barY = y + (int) ((long) (h - barH) * scroll / ms);
-            c.fillRect(x + w - 3, y, 3, h, 0x33FFFFFF);
-            c.fillRect(x + w - 3, barY, 3, barH, Theme.ACCENT);
-        }
+        scrollbar.draw(c, x, y, w, h, contentHeight(), scroll);
     }
 
     @Override
@@ -118,6 +111,10 @@ public class ScrollList extends Widget {
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (!contains(mx, my)) return false;
+        if (button == 0 && scrollbar.mouseClicked(mx, my, x, y, w, h, contentHeight(), scroll,
+                value -> scroll = value)) {
+            return true;
+        }
         int ry = y - scroll;
         for (Row r : rows) {
             int rh = r.height();
@@ -131,5 +128,15 @@ public class ScrollList extends Widget {
             ry += rh + rowGap;
         }
         return false;
+    }
+
+    @Override
+    public void mouseDragged(double mx, double my, int button) {
+        if (button == 0) scrollbar.mouseDragged(my, y, h, contentHeight(), value -> scroll = value);
+    }
+
+    @Override
+    public void mouseReleased(double mx, double my, int button) {
+        scrollbar.mouseReleased();
     }
 }

@@ -1,5 +1,6 @@
 {
   "title.opensoundboard.config": "OpenSoundboard Einstellungen",
+  "title.opensoundboard.accessibility": "Barrierefreiheit",
 
   "category.opensoundboard.general": "OpenSoundboard",
   "key.category.opensoundboard.general": "OpenSoundboard",
@@ -12,6 +13,20 @@
   "message.opensoundboard.empty_url": "Bitte gib eine URL ein.",
   "message.opensoundboard.binaries_missing": "yt-dlp/ffmpeg konnte nicht vorbereitet werden. Überprüfe deine Internetverbindung und die Ordnerberechtigungen.",
   "message.opensoundboard.download_completed": "Download abgeschlossen.",
+
+  "option.opensoundboard.vanillaComponents": "Vanilla-Komponenten",
+  "tooltip.opensoundboard.vanillaComponents": "Verwendet Minecrafts Vanilla-Buttons, -Regler, -Textfelder und -Checkboxen statt der eigenen OpenSoundboard-Komponenten.",
+  "option.opensoundboard.appearance.header": "Darstellung & Barrierefreiheit",
+  "gui.opensoundboard.accessibility.open": "Barrierefreiheit...",
+  "tooltip.opensoundboard.accessibility.open": "Passt Gr\u00f6\u00dfe und Skalierung der OpenSoundboard-Oberfl\u00e4che an.",
+  "option.opensoundboard.uiWidth": "UI-Breite",
+  "tooltip.opensoundboard.uiWidth": "\u00c4ndert die Breite der OpenSoundboard-Fenster.",
+  "option.opensoundboard.uiHeight": "UI-H\u00f6he",
+  "tooltip.opensoundboard.uiHeight": "\u00c4ndert die H\u00f6he der OpenSoundboard-Fenster.",
+  "option.opensoundboard.fontScale": "Schriftgr\u00f6\u00dfe",
+  "tooltip.opensoundboard.fontScale": "\u00c4ndert die Textgr\u00f6\u00dfe in OpenSoundboard.",
+  "gui.opensoundboard.accessibility.reset": "Gr\u00f6\u00dfen zur\u00fccksetzen",
+  "tooltip.opensoundboard.accessibility.reset": "Stellt die Standardwerte f\u00fcr UI-Breite, UI-H\u00f6he und Schriftgr\u00f6\u00dfe wieder her.",
 
   "option.opensoundboard.playWhileMuted": "Abspielen wenn stumm",
   "tooltip.opensoundboard.playWhileMuted": "Erlaubt das Abspielen von Sounds, auch wenn du im Voice-Chat stummgeschaltet bist.",
@@ -111,6 +126,14 @@
   "message.opensoundboard.youtube.failed": "Download fehlgeschlagen.",
   "message.opensoundboard.youtube.timeout": "Download-Zeitüberschreitung.",
   "message.opensoundboard.youtube.exit_code": "yt-dlp wurde mit einem Fehler beendet.",
+  "toast.opensoundboard.youtube.downloading": "Download läuft",
+  "toast.opensoundboard.youtube.preparing": "Downloader wird vorbereitet...",
+  "toast.opensoundboard.youtube.preparing_progress": "Werkzeuge werden vorbereitet: %s%%",
+  "toast.opensoundboard.youtube.progress": "%s%% abgeschlossen",
+  "toast.opensoundboard.youtube.cancelling": "Wird abgebrochen...",
+  "toast.opensoundboard.youtube.completed": "Download abgeschlossen",
+  "toast.opensoundboard.youtube.failed": "Download fehlgeschlagen",
+  "toast.opensoundboard.youtube.cancelled": "Download abgebrochen",
 
   "message.opensoundboard.start_point_set": "Startpunkt gesetzt für %s",
   "message.opensoundboard.rename_failed": "Umbenennen fehlgeschlagen: %s",

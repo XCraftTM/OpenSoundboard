@@ -2,6 +2,7 @@ package de.xcrafttm.opensoundboard.tools;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
+import de.xcrafttm.opensoundboard.ui.UiStyle;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
@@ -28,8 +29,9 @@ public final class GuiTools {
 
     /** Trims a string to fit maxWidth pixels, appending "..." if truncated. */
     public static String trimName(Font f, String name, int maxWidth) {
-        if (f.width(name) <= maxWidth) return name;
-        return f.plainSubstrByWidth(name, Math.max(0, maxWidth - f.width("..."))) + "...";
+        int rawMaxWidth = (int) Math.floor(maxWidth / UiStyle.fontScale());
+        if (f.width(name) <= rawMaxWidth) return name;
+        return f.plainSubstrByWidth(name, Math.max(0, rawMaxWidth - f.width("..."))) + "...";
     }
 
     public static String formatTimeSeconds(int seconds) {

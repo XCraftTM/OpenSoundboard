@@ -1,6 +1,5 @@
 package de.xcrafttm.opensoundboard.ui.widgets;
 
-import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
 import de.xcrafttm.opensoundboard.ui.Widget;
 
@@ -19,6 +18,7 @@ public class ScrollPanel extends Widget {
     private int scroll = 0;
     private int contentHeight = 0;
     private Widget dragging;
+    private final Scrollbar scrollbar = new Scrollbar();
 
     public <T extends Widget> T addChild(T child, int relX, int relY, int cw, int ch) {
         rel.add(new int[]{relX, relY, cw, ch});
@@ -33,6 +33,7 @@ public class ScrollPanel extends Widget {
         contentHeight = 0;
         scroll = 0;
         dragging = null;
+        scrollbar.mouseReleased();
     }
 
     public int contentHeight() {
@@ -72,13 +73,7 @@ public class ScrollPanel extends Widget {
         }
         c.popScissor();
 
-        int ms = maxScroll();
-        if (ms > 0) {
-            int barH = Math.max(20, (int) ((long) h * h / contentHeight));
-            int barY = y + (int) ((long) (h - barH) * scroll / ms);
-            c.fillRect(x + w - 3, y, 3, h, 0x22FFFFFF);
-            c.fillRect(x + w - 3, barY, 3, barH, Theme.ACCENT);
-        }
+        scrollbar.draw(c, x, y, w, h, contentHeight, scroll);
     }
 
     @Override
@@ -103,6 +98,11 @@ public class ScrollPanel extends Widget {
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (my < y || my >= y + h) return false;
+        if (button == 0 && scrollbar.mouseClicked(mx, my, x, y, w, h, contentHeight, scroll,
+                value -> scroll = value)) {
+            dragging = null;
+            return true;
+        }
         layout();
         for (int i = children.size() - 1; i >= 0; i--) {
             Widget ch = children.get(i);
@@ -116,11 +116,13 @@ public class ScrollPanel extends Widget {
 
     @Override
     public void mouseDragged(double mx, double my, int button) {
+        if (button == 0 && scrollbar.mouseDragged(my, y, h, contentHeight, value -> scroll = value)) return;
         if (dragging != null) dragging.mouseDragged(mx, my, button);
     }
 
     @Override
     public void mouseReleased(double mx, double my, int button) {
+        scrollbar.mouseReleased();
         if (dragging != null) {
             dragging.mouseReleased(mx, my, button);
             dragging = null;

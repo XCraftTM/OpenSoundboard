@@ -74,8 +74,8 @@ public class SoundboardScreen extends OsbScreen {
 
     @Override
     protected void buildUi() {
-        ph = (int) (this.height * 0.9);
-        pw = Math.max(420, (int) (this.width * 0.6));
+        ph = screenBoxHeight();
+        pw = screenBoxWidth(420);
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         cx = px + Theme.PAD;
@@ -252,7 +252,8 @@ public class SoundboardScreen extends OsbScreen {
 
             public void draw(UiCanvas c, int rx, int ry, int rw, boolean hovered) {
                 if (hovered) c.fillRoundRect(rx, ry, rw, ROW_H, Theme.ROW);
-                c.text(GuiTools.trimName(font, label, rw - 10), rx + 5, ry + 5, color);
+                c.text(GuiTools.trimName(font, label, rw - 10), rx + 5,
+                        ry + (ROW_H - c.lineHeight()) / 2, color);
             }
 
             public boolean click(double mx, double my, int rx, int ry, int rw, int button) {
@@ -280,14 +281,15 @@ public class SoundboardScreen extends OsbScreen {
                 else if (hovered) c.fillRoundRect(rx, ry, rw, ROW_H, Theme.ROW);
 
                 c.fillRoundRect(rx + 3, ry + 2, PLAY_W, ROW_H - 4, playing ? 0xFFB23A3A : Theme.ACCENT);
+                int textY = c.centeredTextY(ry, ROW_H);
                 c.centeredText(Component.literal(playing ? "⏹" : "▶"),
-                        rx + 3 + PLAY_W / 2, ry + 5, Theme.TEXT_ON_ACCENT);
+                        rx + 3 + PLAY_W / 2, textY, Theme.TEXT_ON_ACCENT);
 
-                c.text(fav ? "★" : "☆", rx + PLAY_W + 8, ry + 5, fav ? 0xFFF0C044 : Theme.TEXT_MUTED);
+                c.text(fav ? "★" : "☆", rx + PLAY_W + 8, textY, fav ? 0xFFF0C044 : Theme.TEXT_MUTED);
 
                 int nameX = rx + PLAY_W + 8 + STAR_W + 4;
                 String label = GuiTools.trimName(font, GuiTools.baseName(file), rw - (nameX - rx) - 6);
-                c.text(label, nameX, ry + 5, fav ? 0xFF8B85F0 : (playing ? 0xFFECD27A : Theme.TEXT));
+                c.text(label, nameX, textY, fav ? 0xFF8B85F0 : (playing ? 0xFFECD27A : Theme.TEXT));
             }
 
             public boolean click(double mx, double my, int rx, int ry, int rw, int button) {
@@ -363,17 +365,15 @@ public class SoundboardScreen extends OsbScreen {
 
     @Override
     protected void renderContent(UiCanvas c) {
-        c.fillRect(0, 0, this.width, this.height, Theme.SCRIM);
-        c.fillRoundRect(px, py, pw, ph, Theme.PANEL);
-        c.roundBorder(px, py, pw, ph, Theme.BORDER);
-        c.fillRect(px + Theme.RADIUS, py, pw - Theme.RADIUS * 2, 3, Theme.ACCENT);
+        renderScreenBox(c, px, py, pw, ph);
         c.centeredText(Component.translatable("gui.opensoundboard.title"), px + pw / 2, py + 12, Theme.TEXT);
 
         int hy = detailsTop - 11;
         if (selected == null) {
             c.centeredText(Component.translatable("gui.opensoundboard.select_hint"), px + pw / 2, hy, Theme.TEXT_MUTED);
         } else {
-            c.centeredText(Component.translatable("gui.opensoundboard.settings_for", selected.getName()), px + pw / 2, hy, 0xFFECD27A);
+            String heading = Component.translatable("gui.opensoundboard.settings_for", selected.getName()).getString();
+            c.centeredText(Component.literal(c.trimText(heading, cw - 8)), px + pw / 2, hy, 0xFFECD27A);
         }
     }
 

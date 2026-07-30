@@ -15,6 +15,8 @@ import java.util.List;
  */
 public abstract class OsbScreen extends Screen {
 
+    private static final int VANILLA_SCREEN_BOX = 0x66000000;
+
     protected final List<Widget> widgets = new ArrayList<>();
     private Widget focused;
     private Widget dragging;
@@ -37,6 +39,36 @@ public abstract class OsbScreen extends Screen {
 
     /** Optional custom drawing behind the widgets (scrim, panels, titles). */
     protected void renderContent(UiCanvas c) {
+    }
+
+    /** Whether screen-specific custom backgrounds and panels should be drawn. */
+    protected final boolean useCustomBackground() {
+        return !UiStyle.useVanillaComponents();
+    }
+
+    /** Applies the user-selected width to the layout's original responsive width. */
+    protected final int screenBoxWidth(int previousMinimumWidth) {
+        int previousWidth = Math.max(previousMinimumWidth, (int) (this.width * 0.6F));
+        int availableWidth = Math.max(1, this.width - Theme.PAD * 2);
+        return Math.min(availableWidth, Math.round(previousWidth * UiStyle.uiWidthScale()));
+    }
+
+    /** Applies the user-selected height to every regular screen box. */
+    protected final int screenBoxHeight() {
+        int availableHeight = Math.max(1, this.height - Theme.PAD);
+        return Math.min(availableHeight, Math.round(this.height * UiStyle.uiHeightScale()));
+    }
+
+    /** Draw the shared custom frame or a simple translucent box in vanilla mode. */
+    protected final void renderScreenBox(UiCanvas c, int x, int y, int width, int height) {
+        if (useCustomBackground()) {
+            c.fillRect(0, 0, this.width, this.height, Theme.SCRIM);
+            c.fillRoundRect(x, y, width, height, Theme.PANEL);
+            c.roundBorder(x, y, width, height, Theme.BORDER);
+            c.fillRect(x + Theme.RADIUS, y, width - Theme.RADIUS * 2, 3, Theme.ACCENT);
+        } else {
+            c.fillRect(x, y, width, height, VANILLA_SCREEN_BOX);
+        }
     }
 
     /** Optional screen-level key handling (e.g. Enter to confirm), before focus routing. */
@@ -87,11 +119,21 @@ public abstract class OsbScreen extends Screen {
             }
         }
         if (tip == null) return;
+        if (UiStyle.useVanillaComponents()) {
+            int tooltipWidth = Math.max(40, Math.min(170, this.width - 20));
+            var lines = c.font.split(Component.literal(tip), tooltipWidth);
+            //? if >=1.21.11 {
+            c.g.setTooltipForNextFrame(lines, c.mouseX, c.mouseY);
+            //?} else {
+            /*setTooltipForNextRenderPass(lines);
+            *///?}
+            return;
+        }
         String[] lines = tip.split("\n");
         int tw = 0;
         for (String ln : lines) tw = Math.max(tw, c.textWidth(ln));
         int pad = 4;
-        int lh = 10;
+        int lh = c.lineHeight() + 1;
         int bw = tw + pad * 2;
         int bh = lines.length * lh + pad * 2 - 2;
         int bx = Math.min(c.mouseX + 10, this.width - bw - 2);

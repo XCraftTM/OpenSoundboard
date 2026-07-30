@@ -23,6 +23,8 @@ public class SoundboardConfigScreen extends OsbScreen {
     private static final int[] SKIP = {1, 3, 5, 10, 15, 30};
     private static final String[] KEYBIND_MODES = {"play_stop", "pause_resume", "play_restart"};
     private static final int[] WHEEL_PAGES = {6, 8, 12, 16};
+    private static final int OPTION_HEIGHT = 20;
+    private static final int OPTION_STEP = 26;
 
     private final Screen parent;
     private ScrollPanel panel;
@@ -39,8 +41,8 @@ public class SoundboardConfigScreen extends OsbScreen {
 
     @Override
     protected void buildUi() {
-        ph = (int) (this.height * 0.9);
-        pw = Math.max(400, (int) (this.width * 0.6));
+        ph = screenBoxHeight();
+        pw = screenBoxWidth(400);
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         int cx = px + Theme.PAD;
@@ -121,9 +123,23 @@ public class SoundboardConfigScreen extends OsbScreen {
                 SoundboardConfig.data.isWheelCustomLayout(), v -> { SoundboardConfig.data.setWheelCustomLayout(v); SoundboardConfig.save(); savedScroll = panel.getScroll(); rebuildUi(); });
 
         Button edit = panel.addChild(new Button(Component.translatable("gui.opensoundboard.wheel.editor.open"),
-                b -> McCompat.setScreen(this.minecraft, new WheelLayoutEditorScreen(this))).secondary(), 0, y[0], w, 18);
+                b -> McCompat.setScreen(this.minecraft, new WheelLayoutEditorScreen(this))).secondary(),
+                0, y[0], w, OPTION_HEIGHT);
         edit.active = SoundboardConfig.data.isWheelCustomLayout();
-        y[0] += 24;
+        y[0] += OPTION_STEP;
+
+        header(y, w, "option.opensoundboard.appearance.header");
+        toggle(y, w, "option.opensoundboard.vanillaComponents",
+                SoundboardConfig.data.isVanillaComponents(), v -> {
+                    savedScroll = panel.getScroll();
+                    SoundboardConfig.data.setVanillaComponents(v);
+                    SoundboardConfig.save();
+                    rebuildUi();
+                });
+        action(y, w, "gui.opensoundboard.accessibility.open", () -> {
+            savedScroll = panel.getScroll();
+            McCompat.setScreen(this.minecraft, new AccessibilityScreen(this));
+        });
 
         add(new Button(Component.literal("✕"), b -> done()).secondary())
                 .bounds(px + pw - 22, py + 3, 18, 16).tooltip(Component.translatable("gui.done").getString());
@@ -133,9 +149,17 @@ public class SoundboardConfigScreen extends OsbScreen {
 
     private void toggle(int[] y, int w, String key, boolean value, Consumer<Boolean> onChange) {
         String tt = tip(key);
-        panel.addChild(new Toggle(value, onChange).tooltip(tt), 0, y[0], 30, 16);
-        panel.addChild(new Label(Component.translatable(key).getString()).tooltip(tt), 38, y[0] + 4, w - 38, 10);
-        y[0] += 24;
+        panel.addChild(new Toggle(value, onChange).tooltip(tt), 0, y[0], 30, OPTION_HEIGHT - 4);
+        panel.addChild(new Label(Component.translatable(key).getString()).tooltip(tt),
+                38, y[0] + 4, w - 38, OPTION_HEIGHT - 4);
+        y[0] += OPTION_STEP;
+    }
+
+    private void action(int[] y, int w, String key, Runnable onClick) {
+        String tt = Component.translatable("tooltip.opensoundboard.accessibility.open").getString();
+        panel.addChild(new Button(Component.translatable(key), b -> onClick.run()).secondary().tooltip(tt),
+                0, y[0], w, OPTION_HEIGHT);
+        y[0] += OPTION_STEP;
     }
 
     private void cycle(int[] y, int w, String key, Supplier<Component> value, Runnable onCycle) {
@@ -143,9 +167,10 @@ public class SoundboardConfigScreen extends OsbScreen {
         panel.addChild(new Button(value.get(), btn -> {
             onCycle.run();
             btn.setLabel(value.get());
-        }).secondary().tooltip(tt), 0, y[0], 70, 16);
-        panel.addChild(new Label(Component.translatable(key).getString()).tooltip(tt), 78, y[0] + 4, w - 78, 10);
-        y[0] += 24;
+        }).secondary().tooltip(tt), 0, y[0], 100, OPTION_HEIGHT);
+        panel.addChild(new Label(Component.translatable(key).getString()).tooltip(tt),
+                108, y[0] + 4, w - 48, OPTION_HEIGHT - 4);
+        y[0] += OPTION_STEP;
     }
 
     private static String tip(String optionKey) {
@@ -153,17 +178,17 @@ public class SoundboardConfigScreen extends OsbScreen {
     }
 
     private void volume(int[] y, int w, String key, float value, Consumer<Float> onChange) {
-        panel.addChild(new Label(Component.translatable(key).getString()).color(Theme.TEXT_MUTED), 0, y[0], w, 10);
-        y[0] += 12;
+        panel.addChild(new Label(Component.translatable(key).getString()).color(Theme.TEXT_MUTED), 0, y[0], w, 12);
+        y[0] += 14;
         panel.addChild(new Slider(value, v -> onChange.accept(v.floatValue()))
-                .readout(v -> Component.literal(Math.round(v * 100) + "%")), 0, y[0], w, 16);
-        y[0] += 22;
+                .readout(v -> Component.literal(Math.round(v * 100) + "%")), 0, y[0], w, OPTION_HEIGHT);
+        y[0] += OPTION_STEP;
     }
 
     private void header(int[] y, int w, String key) {
         y[0] += 6;
-        panel.addChild(new Label(Component.translatable(key).getString()).color(0xFFF0C044), 0, y[0], w, 10);
-        y[0] += 16;
+        panel.addChild(new Label(Component.translatable(key).getString()).color(0xFFF0C044), 0, y[0], w, 12);
+        y[0] += 18;
     }
 
     private void done() {
@@ -173,10 +198,7 @@ public class SoundboardConfigScreen extends OsbScreen {
 
     @Override
     protected void renderContent(UiCanvas c) {
-        c.fillRect(0, 0, this.width, this.height, Theme.SCRIM);
-        c.fillRoundRect(px, py, pw, ph, Theme.PANEL);
-        c.roundBorder(px, py, pw, ph, Theme.BORDER);
-        c.fillRect(px + Theme.RADIUS, py, pw - Theme.RADIUS * 2, 3, Theme.ACCENT);
+        renderScreenBox(c, px, py, pw, ph);
         c.centeredText(Component.translatable("title.opensoundboard.config"), px + pw / 2, py + 12, Theme.TEXT);
     }
 

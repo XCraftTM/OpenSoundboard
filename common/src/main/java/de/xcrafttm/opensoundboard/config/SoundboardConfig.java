@@ -15,6 +15,10 @@ import java.io.IOException;
 @Data
 public class SoundboardConfig {
 
+    public static final float DEFAULT_UI_WIDTH_SCALE = 0.8f;
+    public static final float DEFAULT_UI_HEIGHT_SCALE = 0.9f;
+    public static final float DEFAULT_FONT_SCALE = 1.0f;
+
     private static final File BASE_DIR = new File(PlatformBootstrap.client().configDirectory(), "opensoundboard");
 
     /**
@@ -47,6 +51,10 @@ public class SoundboardConfig {
     int wheelSoundsPerPage = 8;
     boolean wheelFavoritesOnly = false;
     boolean wheelCustomLayout = false;
+    boolean vanillaComponents = false;
+    float uiWidthScale = DEFAULT_UI_WIDTH_SCALE;
+    float uiHeightScale = DEFAULT_UI_HEIGHT_SCALE;
+    float fontScale = DEFAULT_FONT_SCALE;
     boolean showSubfolders = true;
     String sortMode = "name";
     boolean sortAscending = true;
@@ -81,6 +89,7 @@ public class SoundboardConfig {
         } else {
             data = new SoundboardConfig();
         }
+        data.normalizeAccessibility();
 
         // per-sound
         if (SOUNDS_FILE.exists()) {
@@ -111,6 +120,17 @@ public class SoundboardConfig {
 
         // load wheel layout config
         WheelLayoutConfig.load();
+    }
+
+    private void normalizeAccessibility() {
+        uiWidthScale = normalizeScale(uiWidthScale, DEFAULT_UI_WIDTH_SCALE, 0.6f, 1.0f);
+        uiHeightScale = normalizeScale(uiHeightScale, DEFAULT_UI_HEIGHT_SCALE, 0.7f, 1.0f);
+        fontScale = normalizeScale(fontScale, DEFAULT_FONT_SCALE, 0.75f, 1.25f);
+    }
+
+    private static float normalizeScale(float value, float fallback, float minimum, float maximum) {
+        if (!Float.isFinite(value) || value <= 0f) value = fallback;
+        return Math.max(minimum, Math.min(maximum, value));
     }
 
     /**

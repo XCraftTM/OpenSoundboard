@@ -2,9 +2,11 @@ package de.xcrafttm.opensoundboard.ui.widgets;
 
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.UiStyle;
 import de.xcrafttm.opensoundboard.ui.Widget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
@@ -24,6 +26,9 @@ public class TextField extends Widget {
     private Consumer<String> onChange;
     private int blink = 0;
     private int scrollPx = 0;
+    private net.minecraft.client.gui.components.EditBox vanilla;
+    private int vanillaW = -1;
+    private int vanillaH = -1;
 
     public TextField placeholder(String placeholder) {
         this.placeholder = placeholder;
@@ -85,19 +90,27 @@ public class TextField extends Widget {
 
     @Override
     public void draw(UiCanvas c) {
+        if (UiStyle.useVanillaComponents()) {
+            drawVanilla(c);
+            return;
+        }
+
         c.fillRoundRect(x, y, w, h, Theme.FIELD_BG);
         c.roundBorder(x, y, w, h, focused ? Theme.ACCENT : Theme.BORDER);
+        drawContents(c);
+    }
 
-        Font f = font();
+    private void drawContents(UiCanvas c) {
         String s = text.toString();
         int tx = x + 5;
-        int ty = y + (h - 8) / 2;
+        int textHeight = c.lineHeight();
+        int ty = y + (h - textHeight) / 2;
         int innerW = w - 10;
 
-        int cursorX = f.width(s.substring(0, cursor));
+        int cursorX = scaledWidth(s.substring(0, cursor));
         if (cursorX - scrollPx > innerW) scrollPx = cursorX - innerW;
         if (cursorX - scrollPx < 0) scrollPx = cursorX;
-        int fullW = f.width(s);
+        int fullW = scaledWidth(s);
         if (fullW - scrollPx < innerW) scrollPx = Math.max(0, fullW - innerW);
 
         c.pushScissor(x + 1, y + 1, w - 2, h - 2);
@@ -105,31 +118,53 @@ public class TextField extends Widget {
             c.text(placeholder, tx, ty, Theme.TEXT_MUTED);
         } else {
             if (hasSelection()) {
-                int a = f.width(s.substring(0, selStart())) - scrollPx;
-                int b = f.width(s.substring(0, selEnd())) - scrollPx;
-                c.fillRect(tx + a, ty - 1, b - a, 10, Theme.SELECTION);
+                int a = scaledWidth(s.substring(0, selStart())) - scrollPx;
+                int b = scaledWidth(s.substring(0, selEnd())) - scrollPx;
+                c.fillRect(tx + a, ty - 1, b - a, textHeight + 2, Theme.SELECTION);
             }
             c.text(s, tx - scrollPx, ty, Theme.TEXT);
             if (focused && (blink / 6) % 2 == 0) {
-                c.fillRect(tx + cursorX - scrollPx, ty - 1, 1, 10, Theme.TEXT);
+                c.fillRect(tx + cursorX - scrollPx, ty - 1, 1, textHeight + 2, Theme.TEXT);
             }
         }
         c.popScissor();
     }
 
+    private void drawVanilla(UiCanvas c) {
+        if (vanilla == null || vanillaW != w || vanillaH != h) {
+            vanilla = new net.minecraft.client.gui.components.EditBox(c.font, x, y, w, h, Component.empty());
+            vanillaW = w;
+            vanillaH = h;
+        }
+        vanilla.setX(x);
+        vanilla.setY(y);
+        vanilla.setMaxLength(maxLength);
+        if (!vanilla.getValue().isEmpty()) vanilla.setValue("");
+        vanilla.setCursorPosition(0);
+        vanilla.setHighlightPos(0);
+        vanilla.setHint(Component.empty());
+        vanilla.setFocused(false);
+        vanilla.active = active;
+        c.renderVanilla(vanilla);
+        drawContents(c);
+    }
+
     private int indexAtX(double mx) {
-        Font f = font();
         String s = text.toString();
         int rel = (int) mx - (x + 5) + scrollPx;
         if (rel <= 0) return 0;
         for (int i = 1; i <= s.length(); i++) {
-            int wPrev = f.width(s.substring(0, i - 1));
-            int wCur = f.width(s.substring(0, i));
+            int wPrev = scaledWidth(s.substring(0, i - 1));
+            int wCur = scaledWidth(s.substring(0, i));
             if (wCur >= rel) {
                 return (rel - wPrev < wCur - rel) ? i - 1 : i;
             }
         }
         return s.length();
+    }
+
+    private static int scaledWidth(String value) {
+        return (int) Math.ceil(font().width(value) * UiStyle.fontScale());
     }
 
     @Override

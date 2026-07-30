@@ -142,9 +142,11 @@ public class SoundWheelOverlay extends OsbScreen {
 
     @Override
     protected void renderContent(UiCanvas c) {
-        c.fillRect(0, 0, this.width, this.height, 0x66000000);
         int cx = this.width / 2;
         int cy = this.height / 2;
+        if (useCustomBackground()) {
+            c.fillRect(0, 0, this.width, this.height, 0x66000000);
+        }
 
         hovered = null;
         for (Slot s : slots) {
@@ -155,8 +157,10 @@ public class SoundWheelOverlay extends OsbScreen {
             c.centeredText(Component.literal(currentFolder.getName()), cx, cy - BUTTON_H / 2 - 14, 0xFFF0C044);
         }
 
-        c.fillRoundRect(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.PANEL);
-        c.roundBorder(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.BORDER);
+        if (useCustomBackground()) {
+            c.fillRoundRect(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.PANEL);
+            c.roundBorder(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.BORDER);
+        }
         String center = allSounds.isEmpty()
                 ? Component.translatable("gui.opensoundboard.wheel.empty").getString()
                 : Component.translatable("gui.opensoundboard.wheel.page", String.valueOf(page + 1), String.valueOf(totalPages())).getString();
@@ -188,7 +192,8 @@ public class SoundWheelOverlay extends OsbScreen {
         }
         c.fillRoundRect(s.x, s.y, s.w, s.h, bg);
         c.roundBorder(s.x, s.y, s.w, s.h, hov ? Theme.ACCENT : Theme.BORDER);
-        c.centeredText(Component.literal(GuiTools.trimName(this.font, text, s.w - 8)), s.x + s.w / 2, s.y + (s.h - 8) / 2, color);
+        c.centeredText(Component.literal(GuiTools.trimName(this.font, text, s.w - 8)),
+                s.x + s.w / 2, c.centeredTextY(s.y, s.h), color);
     }
 
     // ---------------------------------------------------------------- input

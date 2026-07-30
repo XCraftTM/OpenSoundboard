@@ -3,6 +3,7 @@ package de.xcrafttm.opensoundboard.ui.widgets;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
 import de.xcrafttm.opensoundboard.ui.UiSound;
+import de.xcrafttm.opensoundboard.ui.UiStyle;
 import de.xcrafttm.opensoundboard.ui.Widget;
 import net.minecraft.network.chat.Component;
 
@@ -14,6 +15,11 @@ public class SplitButton extends Widget {
     private Component right;
     private final Runnable onLeft;
     private final Runnable onRight;
+    private net.minecraft.client.gui.components.Button vanillaLeft;
+    private net.minecraft.client.gui.components.Button vanillaRight;
+    private int vanillaSplit = -1;
+    private int vanillaW = -1;
+    private int vanillaH = -1;
 
     public SplitButton(float ratio, Component left, Runnable onLeft, Component right, Runnable onRight) {
         this.ratio = ratio;
@@ -34,6 +40,11 @@ public class SplitButton extends Widget {
     @Override
     public void draw(UiCanvas c) {
         int split = (int) (w * ratio);
+        if (UiStyle.useVanillaComponents()) {
+            drawVanilla(c, split);
+            return;
+        }
+
         boolean hl = c.hovered(x, y, split, h);
         boolean hr = c.hovered(x + split, y, w - split, h);
         c.fillRoundRect(x, y, w, h, Theme.BTN);
@@ -41,8 +52,39 @@ public class SplitButton extends Widget {
         if (hr) c.fillRect(x + split, y + 1, w - split - 1, h - 2, Theme.BTN_HOVER);
         c.roundBorder(x, y, w, h, Theme.BORDER);
         c.fillRect(x + split, y + 2, 1, h - 4, Theme.BORDER);
-        c.centeredText(left, x + split / 2, y + (h - 8) / 2, Theme.TEXT);
-        c.centeredText(right, x + split + (w - split) / 2, y + (h - 8) / 2, Theme.TEXT);
+        int textY = c.centeredTextY(y, h);
+        c.centeredText(visible(c, left, split), x + split / 2, textY, Theme.TEXT);
+        c.centeredText(visible(c, right, w - split), x + split + (w - split) / 2, textY, Theme.TEXT);
+    }
+
+    private void drawVanilla(UiCanvas c, int split) {
+        if (vanillaLeft == null || vanillaSplit != split || vanillaW != w || vanillaH != h) {
+            vanillaLeft = net.minecraft.client.gui.components.Button.builder(Component.empty(), ignored -> {
+            }).bounds(x, y, split, h).build();
+            vanillaRight = net.minecraft.client.gui.components.Button.builder(Component.empty(), ignored -> {
+            }).bounds(x + split, y, w - split, h).build();
+            vanillaSplit = split;
+            vanillaW = w;
+            vanillaH = h;
+        }
+        vanillaLeft.setX(x);
+        vanillaLeft.setY(y);
+        vanillaLeft.setMessage(Component.empty());
+        vanillaLeft.active = active;
+        vanillaRight.setX(x + split);
+        vanillaRight.setY(y);
+        vanillaRight.setMessage(Component.empty());
+        vanillaRight.active = active;
+        c.renderVanilla(vanillaLeft);
+        c.renderVanilla(vanillaRight);
+        int textColor = active ? 0xFFFFFFFF : 0xFFA0A0A0;
+        int textY = c.centeredTextY(y, h);
+        c.centeredText(visible(c, left, split), x + split / 2, textY, textColor);
+        c.centeredText(visible(c, right, w - split), x + split + (w - split) / 2, textY, textColor);
+    }
+
+    private static Component visible(UiCanvas c, Component label, int width) {
+        return Component.literal(c.trimText(label.getString(), Math.max(0, width - 8)));
     }
 
     @Override

@@ -1,5 +1,6 @@
 {
   "title.opensoundboard.config": "OpenSoundboard Config",
+  "title.opensoundboard.accessibility": "Accessibility",
 
   "category.opensoundboard.general": "OpenSoundboard",
   "key.category.opensoundboard.general": "OpenSoundboard",
@@ -12,6 +13,20 @@
   "message.opensoundboard.empty_url": "Please enter a URL.",
   "message.opensoundboard.binaries_missing": "Could not prepare yt-dlp/ffmpeg. Check your internet connection and game folder permissions.",
   "message.opensoundboard.download_completed": "Download completed.",
+
+  "option.opensoundboard.vanillaComponents": "Vanilla Components",
+  "tooltip.opensoundboard.vanillaComponents": "Use Minecraft's vanilla buttons, sliders, text fields, and checkboxes instead of the custom OpenSoundboard components.",
+  "option.opensoundboard.appearance.header": "Appearance & Accessibility",
+  "gui.opensoundboard.accessibility.open": "Accessibility...",
+  "tooltip.opensoundboard.accessibility.open": "Customize the size and scale of the OpenSoundboard interface.",
+  "option.opensoundboard.uiWidth": "UI Width",
+  "tooltip.opensoundboard.uiWidth": "Changes the width of OpenSoundboard screens.",
+  "option.opensoundboard.uiHeight": "UI Height",
+  "tooltip.opensoundboard.uiHeight": "Changes the height of OpenSoundboard screens.",
+  "option.opensoundboard.fontScale": "Font Size",
+  "tooltip.opensoundboard.fontScale": "Changes the size of text throughout OpenSoundboard.",
+  "gui.opensoundboard.accessibility.reset": "Reset Sizes",
+  "tooltip.opensoundboard.accessibility.reset": "Restore the default UI width, height, and font size.",
 
   "option.opensoundboard.playWhileMuted": "Play While Muted",
   "tooltip.opensoundboard.playWhileMuted": "Allows sounds to play even if you are muted in voice chat.",
@@ -111,6 +126,14 @@
   "message.opensoundboard.youtube.failed": "Download failed.",
   "message.opensoundboard.youtube.timeout": "Download timed out.",
   "message.opensoundboard.youtube.exit_code": "yt-dlp exited with an error.",
+  "toast.opensoundboard.youtube.downloading": "Downloading",
+  "toast.opensoundboard.youtube.preparing": "Preparing downloader...",
+  "toast.opensoundboard.youtube.preparing_progress": "Preparing tools: %s%%",
+  "toast.opensoundboard.youtube.progress": "%s%% complete",
+  "toast.opensoundboard.youtube.cancelling": "Cancelling...",
+  "toast.opensoundboard.youtube.completed": "Download complete",
+  "toast.opensoundboard.youtube.failed": "Download failed",
+  "toast.opensoundboard.youtube.cancelled": "Download cancelled",
 
   "message.opensoundboard.start_point_set": "Start point set for %s",
   "message.opensoundboard.rename_failed": "Failed to rename: %s",

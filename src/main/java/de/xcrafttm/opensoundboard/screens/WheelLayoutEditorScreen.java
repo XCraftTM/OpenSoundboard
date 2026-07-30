@@ -67,11 +67,13 @@ public class WheelLayoutEditorScreen extends OsbScreen {
 
     @Override
     protected void renderContent(UiCanvas c) {
-        c.fillRect(0, 0, this.width, this.height, 0x99000000);
         int cx = this.width / 2;
         int cy = this.height / 2;
-        c.fillRoundRect(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.PANEL);
-        c.roundBorder(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.BORDER);
+        if (useCustomBackground()) {
+            c.fillRect(0, 0, this.width, this.height, 0x99000000);
+            c.fillRoundRect(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.PANEL);
+            c.roundBorder(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.BORDER);
+        }
         c.centeredText(Component.translatable("gui.opensoundboard.wheel.editor.hint"), cx, cy - 4, Theme.TEXT_MUTED);
     }
 

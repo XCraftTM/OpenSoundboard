@@ -1,6 +1,7 @@
 package de.xcrafttm.opensoundboard.ui;
 
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 //? if >=26 {
 /*import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -94,19 +95,45 @@ public final class UiCanvas {
     }
 
     public void text(String s, int x, int y, int color) {
+        float scale = UiStyle.fontScale();
+        if (scale != 1F) pushTextPose(x, y, scale);
         //? if >=26 {
-        /*g.text(font, s, x, y, color, false);
+        /*g.text(font, s, scale == 1F ? x : 0, scale == 1F ? y : 0, color, false);
         *///?} else {
-        g.drawString(font, s, x, y, color, false);
+        g.drawString(font, s, scale == 1F ? x : 0, scale == 1F ? y : 0, color, false);
         //?}
+        if (scale != 1F) popTextPose();
     }
 
     public void centeredText(Component s, int centerX, int y, int color) {
+        float scale = UiStyle.fontScale();
+        if (scale != 1F) pushTextPose(centerX, y, scale);
         //? if >=26 {
-        /*g.centeredText(font, s, centerX, y, color);
+        /*g.centeredText(font, s, scale == 1F ? centerX : 0, scale == 1F ? y : 0, color);
         *///?} else {
-        g.drawCenteredString(font, s, centerX, y, color);
+        g.drawCenteredString(font, s, scale == 1F ? centerX : 0, scale == 1F ? y : 0, color);
         //?}
+        if (scale != 1F) popTextPose();
+    }
+
+    private void pushTextPose(int x, int y, float scale) {
+        //? if >=1.21.11 {
+        g.pose().pushMatrix();
+        g.pose().translate(x, y);
+        g.pose().scale(scale);
+        //?} else {
+        /*g.pose().pushPose();
+        g.pose().translate(x, y, 0);
+        g.pose().scale(scale, scale, 1);
+        *///?}
+    }
+
+    private void popTextPose() {
+        //? if >=1.21.11 {
+        g.pose().popMatrix();
+        //?} else {
+        /*g.pose().popPose();
+        *///?}
     }
 
     /** Clip subsequent drawing to this rectangle (enableScissor is identical on both surfaces). */
@@ -119,11 +146,37 @@ public final class UiCanvas {
     }
 
     public int textWidth(String s) {
-        return font.width(s);
+        return (int) Math.ceil(font.width(s) * UiStyle.fontScale());
     }
 
     public int lineHeight() {
-        return font.lineHeight;
+        return (int) Math.ceil(font.lineHeight * UiStyle.fontScale());
+    }
+
+    /**
+     * Visual vertical center for text inside a control. Minecraft's line height includes one
+     * spacing pixel below the glyphs, so the purely mathematical center appears too high.
+     */
+    public int centeredTextY(int y, int height) {
+        return y + (height - lineHeight()) / 2 + 1;
+    }
+
+    /** Truncate text to the configured visual font width and append an ellipsis. */
+    public String trimText(String s, int maxWidth) {
+        if (textWidth(s) <= maxWidth) return s;
+        String ellipsis = "...";
+        int rawMax = (int) Math.floor(maxWidth / UiStyle.fontScale());
+        int contentWidth = Math.max(0, rawMax - font.width(ellipsis));
+        return font.plainSubstrByWidth(s, contentWidth) + ellipsis;
+    }
+
+    /** Render a native Minecraft component inside the shared OpenSoundboard layout. */
+    public void renderVanilla(AbstractWidget widget) {
+        //? if >=26 {
+        /*widget.extractRenderState(g, mouseX, mouseY, 0F);
+        *///?} else {
+        widget.render(g, mouseX, mouseY, 0F);
+        //?}
     }
 
     /** True if the point (mouseX, mouseY) is inside the given rectangle. */

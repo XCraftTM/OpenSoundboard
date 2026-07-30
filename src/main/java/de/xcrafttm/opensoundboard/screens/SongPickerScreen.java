@@ -50,8 +50,8 @@ public class SongPickerScreen extends OsbScreen {
 
     @Override
     protected void buildUi() {
-        ph = (int) (this.height * 0.9);
-        pw = Math.max(360, (int) (this.width * 0.6));
+        ph = screenBoxHeight();
+        pw = screenBoxWidth(360);
         px = (this.width - pw) / 2;
         py = (this.height - ph) / 2;
         int cx = px + Theme.PAD;
@@ -98,11 +98,12 @@ public class SongPickerScreen extends OsbScreen {
                 boolean previewing = name.equals(previewingName);
                 if (hovered) c.fillRoundRect(rx, ry, rw, ROW_H, Theme.ROW);
                 c.fillRoundRect(rx + 3, ry + 2, PREVIEW_W, ROW_H - 4, previewing ? 0xFFB23A3A : Theme.BTN);
-                c.centeredText(Component.literal(previewing ? "⏹" : "▶"), rx + 3 + PREVIEW_W / 2, ry + 5,
+                int textY = c.centeredTextY(ry, ROW_H);
+                c.centeredText(Component.literal(previewing ? "⏹" : "▶"), rx + 3 + PREVIEW_W / 2, textY,
                         previewing ? Theme.TEXT_ON_ACCENT : Theme.TEXT);
                 int nameX = rx + PREVIEW_W + 10;
                 String label = (fav ? "★ " : "") + GuiTools.baseName(file);
-                c.text(GuiTools.trimName(font, label, rw - (nameX - rx) - 6), nameX, ry + 5,
+                c.text(GuiTools.trimName(font, label, rw - (nameX - rx) - 6), nameX, textY,
                         fav ? 0xFF8B85F0 : Theme.TEXT);
             }
 
@@ -179,10 +180,7 @@ public class SongPickerScreen extends OsbScreen {
 
     @Override
     protected void renderContent(UiCanvas c) {
-        c.fillRect(0, 0, this.width, this.height, Theme.SCRIM);
-        c.fillRoundRect(px, py, pw, ph, Theme.PANEL);
-        c.roundBorder(px, py, pw, ph, Theme.BORDER);
-        c.fillRect(px + Theme.RADIUS, py, pw - Theme.RADIUS * 2, 3, Theme.ACCENT);
+        renderScreenBox(c, px, py, pw, ph);
         c.centeredText(Component.translatable("gui.opensoundboard.wheel.picker.title"), px + pw / 2, py + 12, Theme.TEXT);
     }
 
