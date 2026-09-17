@@ -8,6 +8,7 @@ Currently supported build targets are listed in [`versions/supported.txt`](versi
 - Minecraft 1.21.11
 - Minecraft 26.1.2
 - Minecraft 26.2
+- Minecraft 26.3
 
 ## Requirements
 
@@ -61,6 +62,7 @@ PowerShell or Command Prompt:
 .\gradlew.bat stonecutterSwitchTo1.21.11
 .\gradlew.bat stonecutterSwitchTo26.1.2
 .\gradlew.bat stonecutterSwitchTo26.2
+.\gradlew.bat stonecutterSwitchTo26.3
 ```
 
 Linux or macOS:
@@ -70,6 +72,7 @@ Linux or macOS:
 ./gradlew stonecutterSwitchTo1.21.11
 ./gradlew stonecutterSwitchTo26.1.2
 ./gradlew stonecutterSwitchTo26.2
+./gradlew stonecutterSwitchTo26.3
 ```
 
 After switching, IDE imports, Minecraft dependencies, mappings, and Stonecutter conditions correspond to that active version.
@@ -168,6 +171,7 @@ Convenience tasks switch to the requested version and launch its Minecraft clien
 .\gradlew.bat client_1_21_11
 .\gradlew.bat client_26_1_2
 .\gradlew.bat client_26_2
+.\gradlew.bat client_26_3
 ```
 
 Java 25 is required when launching a 26.x client:
@@ -198,6 +202,8 @@ oldApiCall();
 //?}
 ```
 
+Version-specific input (key codes, key polling, mouse buttons) goes through `tools/Keys.java`: Minecraft 26.3 replaced GLFW with SDL3, so key values are SDL scancodes from 26.3 on.
+
 Important rules:
 
 - Edit the shared files under `src/`, not files under `versions/*/build/generated/stonecutter/`.
@@ -209,7 +215,7 @@ Important rules:
 
 When adding a Minecraft version:
 
-1. Create `versions/<version>/gradle.properties` with the Minecraft, Java, Loom, Fabric, Voice Chat, Mod Menu, and publishing values.
+1. Create `versions/<version>/gradle.properties` with the Minecraft, Java, Loom, Fabric, Simple Voice Chat, Plasmo Voice API, Mod Menu, and publishing values.
 2. Add the version to `versions/supported.txt` in the desired build order.
 3. Add or adjust Stonecutter conditions in the shared source tree.
 4. Switch to the new version and run its fully qualified build task.

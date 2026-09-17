@@ -9,12 +9,19 @@ import java.util.function.IntConsumer;
 /** Shared clickable and draggable vertical scrollbar used by lists and panels. */
 final class Scrollbar {
 
-    private static final int DRAW_WIDTH = 3;
+    private static final int MODERN_WIDTH = 3;
+    private static final int VANILLA_WIDTH = 6;
     private static final int HIT_WIDTH = 8;
     private static final int MIN_THUMB_HEIGHT = 20;
 
     private boolean dragging;
     private int grabOffset;
+
+    /** Horizontal space the scrollbar takes when content overflows (0 otherwise). */
+    static int reservedWidth(int height, int contentHeight) {
+        if (maxScroll(height, contentHeight) <= 0) return 0;
+        return (UiStyle.useVanillaComponents() ? VANILLA_WIDTH : MODERN_WIDTH) + 3;
+    }
 
     void draw(UiCanvas c, int x, int y, int width, int height, int contentHeight, int scroll) {
         int maxScroll = maxScroll(height, contentHeight);
@@ -22,17 +29,15 @@ final class Scrollbar {
 
         int thumbHeight = thumbHeight(height, contentHeight);
         int thumbY = thumbY(y, height, thumbHeight, maxScroll, scroll);
-        int barX = x + width - DRAW_WIDTH;
         boolean hovered = dragging || c.hovered(x + width - HIT_WIDTH, y, HIT_WIDTH, height);
 
         if (UiStyle.useVanillaComponents()) {
-            c.fillRect(barX, y, DRAW_WIDTH, height, 0xFF000000);
-            c.fillRect(barX, thumbY, DRAW_WIDTH, thumbHeight, hovered ? 0xFFA0A0A0 : 0xFF808080);
-            c.fillRect(barX, thumbY, 1, thumbHeight, 0xFFC0C0C0);
+            int barX = x + width - VANILLA_WIDTH;
+            c.sprite("widget/scroller_background", barX, y, VANILLA_WIDTH, height);
+            c.sprite("widget/scroller", barX, thumbY, VANILLA_WIDTH, thumbHeight);
         } else {
-            c.fillRect(barX, y, DRAW_WIDTH, height, 0x33FFFFFF);
-            c.fillRect(barX, thumbY, DRAW_WIDTH, thumbHeight,
-                    hovered ? Theme.ACCENT_HOVER : Theme.ACCENT);
+            int barX = x + width - MODERN_WIDTH - 1;
+            c.fillRect(barX, thumbY, MODERN_WIDTH, thumbHeight, hovered ? Theme.accent : Theme.borderStrong);
         }
     }
 

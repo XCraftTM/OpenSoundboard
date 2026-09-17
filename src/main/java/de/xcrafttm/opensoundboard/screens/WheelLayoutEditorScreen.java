@@ -5,22 +5,22 @@ import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.config.WheelLayoutConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
 import de.xcrafttm.opensoundboard.tools.McCompat;
-import de.xcrafttm.opensoundboard.tools.WheelLayout;
+import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.UiSound;
+import de.xcrafttm.opensoundboard.ui.UiStyle;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
-/** Radial editor: shows each wheel slot as a button; click one to assign a sound via the picker. */
+/** Pie-menu editor: shows each wheel slot as a slice; click one to assign a sound via the picker. */
 public class WheelLayoutEditorScreen extends OsbScreen {
-
-    private static final int BUTTON_W = 160;
-    private static final int BUTTON_H = 20;
-    private static final int CENTER_W = 120;
 
     private final Screen parent;
 
@@ -29,61 +29,71 @@ public class WheelLayoutEditorScreen extends OsbScreen {
         this.parent = parent;
     }
 
+    private PieWheel wheel;
+    private int hovered = -1;
+
     @Override
     protected void buildUi() {
         int total = SoundboardConfig.data.getWheelSoundsPerPage();
         WheelLayoutConfig.resize(total);
-        int cx = this.width / 2;
-        int cy = this.height / 2;
+        boolean vanilla = vanilla();
+        wheel = PieWheel.fit(this.width, this.height, total, vanilla ? 30 : 26, vanilla ? 36 : 12);
 
-        for (int i = 0; i < total; i++) {
-            final int slot = i;
-            int[] pos = WheelLayout.buttonPos(i, total, cx, cy, BUTTON_W, BUTTON_H, CENTER_W, this.width, this.height);
-            String assigned = WheelLayoutConfig.get(i);
-            Button b = add(new Button(slotLabel(assigned), btn -> openPicker(slot)).secondary());
-            b.bounds(pos[0], pos[1], BUTTON_W, BUTTON_H);
-            if (assigned != null && !assigned.isBlank()) b.tooltip(GuiTools.baseName(new File(OpenSoundboardClient.soundDir, assigned)));
+        if (vanilla) {
+            add(new Button(Component.translatable("gui.done"), b -> onClose()))
+                    .bounds(this.width / 2 - 100, this.height - 28, 200, 20);
+        } else {
+            add(new Button(Icons.CLOSE, null, b -> onClose()).ghost())
+                    .bounds(this.width - 22, 6, 16, 16).tooltip(tip("gui.done"));
         }
-
-        add(new Button(Component.literal("✕"), btn -> McCompat.setScreen(this.minecraft, parent)).secondary())
-                .bounds(this.width - 24, 4, 18, 16).tooltip(Component.translatable("gui.done").getString());
-    }
-
-    private Component slotLabel(String fileName) {
-        if (fileName == null || fileName.isBlank()) {
-            return Component.translatable("gui.opensoundboard.wheel.editor.empty_slot");
-        }
-        boolean fav = SoundboardConfig.get(fileName).isFavorite();
-        String base = (fav ? "★ " : "") + GuiTools.baseName(new File(OpenSoundboardClient.soundDir, fileName));
-        return Component.literal(GuiTools.trimName(this.font, base, BUTTON_W - 8));
-    }
-
-    private void openPicker(int slot) {
-        McCompat.setScreen(this.minecraft, new SongPickerScreen(this, name -> {
-            WheelLayoutConfig.set(slot, name);
-            WheelLayoutConfig.save();
-        }));
     }
 
     @Override
     protected void renderContent(UiCanvas c) {
-        int cx = this.width / 2;
-        int cy = this.height / 2;
-        if (useCustomBackground()) {
-            c.fillRect(0, 0, this.width, this.height, 0x99000000);
-            c.fillRoundRect(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.PANEL);
-            c.roundBorder(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.BORDER);
+        if (vanilla()) {
+            c.centeredText(getTitle().getString(), this.width / 2, 12, UiStyle.VANILLA_TEXT);
+        } else {
+            c.fillRect(0, 0, this.width, this.height, Theme.scrim);
+            c.text(getTitle().getString(), 10, 11, Theme.text);
         }
-        c.centeredText(Component.translatable("gui.opensoundboard.wheel.editor.hint"), cx, cy - 4, Theme.TEXT_MUTED);
+
+        hovered = wheel.sliceAt(c.mouseX, c.mouseY);
+        if (Math.hypot(c.mouseX - wheel.cx, c.mouseY - wheel.cy) > wheel.outer + 24) hovered = -1;
+
+        List<PieWheel.Slice> slices = new ArrayList<>();
+        for (int i = 0; i < wheel.count; i++) {
+            String assigned = WheelLayoutConfig.get(i);
+            if (assigned == null || assigned.isBlank()) {
+                // Empty slots stay clickable in the editor, so they are not marked as empty here.
+                slices.add(new PieWheel.Slice(null, 0, tip("gui.opensoundboard.wheel.editor.empty_slot"), false, false));
+            } else {
+                boolean fav = SoundboardConfig.get(assigned).isFavorite();
+                String name = GuiTools.baseName(new File(OpenSoundboardClient.soundDir, assigned));
+                slices.add(new PieWheel.Slice(fav ? Icons.STAR : null, Theme.FAVORITE, name, false, false));
+            }
+        }
+        String title = hovered >= 0 ? slices.get(hovered).label() : tip("gui.opensoundboard.wheel.editor.hint");
+        wheel.render(c, slices, hovered, title, null);
+    }
+
+    @Override
+    protected boolean screenMouseClicked(double mx, double my, int button) {
+        if (button != 0 || hovered < 0) return false;
+        final int slot = hovered;
+        UiSound.click();
+        McCompat.setScreen(minecraft, new SongPickerScreen(this, name -> {
+            WheelLayoutConfig.set(slot, name);
+            WheelLayoutConfig.save();
+        }));
+        return true;
+    }
+
+    private static String tip(String key) {
+        return Component.translatable(key).getString();
     }
 
     @Override
     public void onClose() {
         McCompat.setScreen(this.minecraft, parent);
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 }

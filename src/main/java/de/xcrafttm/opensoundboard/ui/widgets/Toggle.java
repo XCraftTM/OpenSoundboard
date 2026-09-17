@@ -1,5 +1,6 @@
 package de.xcrafttm.opensoundboard.ui.widgets;
 
+import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
 import de.xcrafttm.opensoundboard.ui.UiSound;
@@ -9,17 +10,25 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
-/** Flat on/off switch. Indigo track when on, sliding knob. */
+/**
+ * On/off control. Modern style: a square checkbox with a pixel check mark. Vanilla style: a
+ * Minecraft checkbox, or — when a label is set — an option button reading "Label: ON/OFF".
+ */
 public class Toggle extends Widget {
 
     private boolean value;
     private final Consumer<Boolean> onChange;
-    private net.minecraft.client.gui.components.Checkbox vanilla;
-    private boolean vanillaValue;
+    private Component label;
 
     public Toggle(boolean value, Consumer<Boolean> onChange) {
         this.value = value;
         this.onChange = onChange;
+    }
+
+    /** Label used by the vanilla option-button rendering. */
+    public Toggle label(Component label) {
+        this.label = label;
+        return this;
     }
 
     public boolean value() {
@@ -30,40 +39,44 @@ public class Toggle extends Widget {
         this.value = v;
     }
 
+    public void toggle() {
+        if (!active) return;
+        UiSound.click();
+        value = !value;
+        onChange.accept(value);
+    }
+
     @Override
     public void draw(UiCanvas c) {
+        boolean hover = active && c.hovered(x, y, w, h);
         if (UiStyle.useVanillaComponents()) {
-            drawVanilla(c);
+            if (label != null) {
+                String sprite = !active ? "widget/button_disabled" : (hover ? "widget/button_highlighted" : "widget/button");
+                c.sprite(sprite, x, y, w, h);
+                Component state = Component.translatable(value ? "options.on" : "options.off");
+                String text = Component.translatable("options.generic_value", label, state).getString();
+                c.fitText(text, x + 4, c.centeredTextY(y, h), w - 8,
+                        active ? UiStyle.VANILLA_TEXT : UiStyle.VANILLA_TEXT_DISABLED);
+            } else {
+                String sprite = "widget/checkbox" + (value ? "_selected" : "") + (hover ? "_highlighted" : "");
+                c.sprite(sprite, x, y, w, h);
+            }
             return;
         }
 
-        boolean hover = c.hovered(x, y, w, h);
-        c.fillRoundRect(x, y, w, h, value ? Theme.ACCENT : 0xFF3A3A44);
-        int knobW = w / 2 - 3;
-        int kx = value ? x + w - knobW - 2 : x + 2;
-        c.fillRoundRect(kx, y + 2, knobW, h - 4, hover ? 0xFFFFFFFF : 0xFFE4E4EA);
-    }
-
-    private void drawVanilla(UiCanvas c) {
-        if (vanilla == null || vanillaValue != value) {
-            vanilla = net.minecraft.client.gui.components.Checkbox.builder(Component.empty(), c.font)
-                    .pos(x, y)
-                    .selected(value)
-                    .build();
-            vanillaValue = value;
+        if (value) {
+            c.fillRoundRect(x, y, w, h, !active ? Theme.controlDisabled : (hover ? Theme.accentHover : Theme.accent));
+            c.icon(Icons.CHECK, x, y, w, h, active ? Theme.onAccent : Theme.textFaint);
+        } else {
+            c.fillRoundRect(x, y, w, h, Theme.field);
+            c.roundBorder(x, y, w, h, !active ? Theme.border : (hover ? Theme.accent : Theme.borderStrong));
         }
-        vanilla.setX(x + (w - vanilla.getWidth()) / 2);
-        vanilla.setY(y + (h - vanilla.getHeight()) / 2);
-        vanilla.active = active;
-        c.renderVanilla(vanilla);
     }
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         if (button == 0 && active) {
-            UiSound.click();
-            value = !value;
-            onChange.accept(value);
+            toggle();
             return true;
         }
         return false;

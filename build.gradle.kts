@@ -51,6 +51,7 @@ repositories {
     maven("https://maven.parchmentmc.org")
     maven("https://maven.terraformersmc.com/")            // Mod Menu
     maven("https://maven.maxhenkel.de/repository/public") // Simple Voice Chat
+    maven("https://repo.plasmoverse.com/releases")        // Plasmo Voice API
     maven("https://api.modrinth.com/maven") {
         content { includeGroup("maven.modrinth") }
     }
@@ -81,9 +82,14 @@ dependencies {
     // Pure, mapping-neutral shared code (config models, platform interfaces).
     "implementation"(project(":common"))
 
-    // Simple Voice Chat API — a plain library (no Minecraft classes), so it needs no remap
-    // on either mapping path. Provided at runtime by the Simple Voice Chat mod.
+    // Voice chat APIs are plain libraries (no Minecraft classes), so they need no remap on either
+    // mapping path. Both are optional at runtime and provided by the respective voice chat mod.
     "compileOnly"("de.maxhenkel.voicechat:voicechat-api:${vprop("voicechat.api.version")}")
+    "compileOnly"("su.plo.voice.api:client:${vprop("plasmovoice.api.version")}")
+
+    // Pure-Java MP3 decoder (MIT), bundled so playback does not depend on a voice chat mod's decoder.
+    "implementation"("fr.delthas:javamp3:1.0.1")
+    "include"("fr.delthas:javamp3:1.0.1")
 }
 
 tasks.processResources {
@@ -94,6 +100,7 @@ tasks.processResources {
         "fabricLoaderVersion" to vprop("fabric.loader.version"),
         "fabricApiVersion" to vprop("fabric.api.version"),
         "voicechatVersion" to vprop("voicechat.version"),
+        "plasmovoiceVersion" to vprop("plasmovoice.api.version"),
         "modmenuVersion" to vprop("modmenu.version"),
     )
     inputs.properties(replacements)
@@ -125,8 +132,8 @@ tasks.withType<AbstractArchiveTask>().configureEach {
 }
 
 // ---------------------------------------------------------------------------
-// Modrinth publishing. Fabric only — Simple Voice Chat (a required dependency) does
-// not support Quilt, so we don't list it. Provide the token via the MODRINTH_TOKEN env
+// Modrinth publishing. Fabric only — the supported voice chat mods target Fabric, so Quilt
+// is not listed. Provide the token via the MODRINTH_TOKEN env
 // var or a `modrinth_token` property in ~/.gradle/gradle.properties (never committed).
 // One Modrinth version is published per Minecraft version, so switch active + publish each:
 //   ./gradlew stonecutterSwitchTo<ver> && ./gradlew :<ver>:modrinth
@@ -149,6 +156,8 @@ modrinth {
     loaders.set(listOf("fabric"))
     dependencies {
         required.project("fabric-api")
-        required.project("simple-voice-chat")
+        // One of the two voice chat mods is needed; Modrinth has no "one of", so both are optional.
+        optional.project("simple-voice-chat")
+        optional.project("plasmo-voice")
     }
 }

@@ -1,3 +1,70 @@
+## OpenSoundboard 0.5.0 - Redesign & Plasmo Voice Update
+
+This release rebuilds the whole interface, adds Plasmo Voice support, makes voice chat optional, turns the sound wheel into a pie menu, and lets you search YouTube right from the game.
+
+### Highlights
+
+- Added support for **Minecraft 26.3**.
+- Added **Plasmo Voice** support. Simple Voice Chat and Plasmo Voice are now both **optional**: without a voice chat, sounds simply play locally on your computer.
+- **Redesigned interface** in both styles:
+  - **Modern** has a cleaner look with pixel icons and a customizable **accent color** (8 presets or any hex color), background tone, panel opacity, and rounded corners.
+  - **Vanilla** now uses Minecraft's real buttons, sliders, tabs, and menu backgrounds, and long labels scroll just like in vanilla menus.
+- **New settings screen** with four pages: General, Audio, Sound Wheel, and Appearance. Every option has a short description. The Accessibility options (UI width, height, and text size) now live on the Appearance page.
+- **Folders inside folders**: organize sounds as deep as you like, with clickable breadcrumbs to jump back up.
+- The **Sound Wheel** is now a pie menu. Point in a direction to pick a slice; names wrap over several lines, and the center shows the full name of the hovered sound.
+- The YouTube Downloader is now the **Downloader**, with a new **Search** mode: results show thumbnail, title, channel, length, and views, and download with one click.
+
+### Soundboard
+
+- Folders show how many sounds they contain, and search looks through all subfolders.
+- The sound list shows each sound's length.
+- Double-click a sound to play it.
+- Press Enter to play the selected sound, or the first search result.
+- Just start typing to search.
+- The header shows where sounds are currently playing through (Simple Voice Chat, Plasmo Voice, or Local only).
+- Fixed per-sound keybinds not working for sounds inside subfolders.
+
+### Downloader
+
+- Switch between pasting a link and searching YouTube.
+- The yt-dlp log is hidden by default and can be shown with one button.
+- New "Save to last folder" toggle downloads into the folder you last opened instead of the main sounds folder.
+
+### Sound Wheel
+
+- Slices use the space they have: labels wrap over multiple lines.
+- Navigate nested folders directly in the wheel.
+- The Wheel Layout editor uses the same pie design.
+
+### Audio
+
+- New "Play locally without voice chat" option (on by default), and the current output is shown in Settings → Audio.
+- MP3s play even without Simple Voice Chat installed. When it is installed, its faster native decoder is still used.
+
+### Other Changes
+
+- Mod Menu now shows a full description, links to Modrinth and GitHub, credits, and update checks.
+- Updated to the latest Fabric API, Simple Voice Chat 2.6.23, and Mod Menu for every supported version.
+- Refreshed English and German translations.
+
+### Good to Know
+
+- Fabric API has to be up to date, since the minimum required version was raised.
+- With Plasmo Voice, sounds are sent while your microphone activation is active (voice activation, or while holding push-to-talk).
+- On Minecraft 26.3, per-sound keybinds created on older Minecraft versions need to be set again, because 26.3 changed how keys are stored.
+
+### Supported Minecraft Versions
+
+- 1.21 and 1.21.1
+- 1.21.11
+- 26.1, 26.1.1, and 26.1.2
+- 26.2
+- 26.3
+
+Requires Fabric API. Simple Voice Chat or Plasmo Voice is needed to play sounds to other players. Mod Menu is optional.
+
+---
+
 ## OpenSoundboard 0.4.0 - UI & Downloading Update
 
 This release makes OpenSoundboard feel more at home in Minecraft, adds extensive UI sizing controls, and lets YouTube downloads keep running outside the downloader screen.

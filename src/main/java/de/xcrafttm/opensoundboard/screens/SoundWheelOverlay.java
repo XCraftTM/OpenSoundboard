@@ -4,44 +4,38 @@ import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.config.WheelLayoutConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
+import de.xcrafttm.opensoundboard.tools.Keys;
 import de.xcrafttm.opensoundboard.tools.McCompat;
+import de.xcrafttm.opensoundboard.tools.SoundLibrary;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
-import de.xcrafttm.opensoundboard.tools.WheelLayout;
+import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.UiStyle;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
 /**
- * In-world radial overlay opened while the wheel key is held. Scroll to change page; release the
- * key to play the hovered sound (folders/back navigate instead). Fully custom-drawn.
+ * In-world pie menu opened while the wheel key is held. Point in a direction to pick a slice,
+ * scroll to change page, and release the key to play it (click folders/back to navigate).
  */
 public class SoundWheelOverlay extends OsbScreen {
 
-    private static final int BUTTON_W = 160;
-    private static final int BUTTON_H = 20;
-    private static final int CENTER_W = 120;
     private static final String BACK = "__BACK__";
 
     private static int page = 0;
     private static File currentFolder = null;
 
-    private record Slot(int x, int y, int w, int h, File file, boolean isBack, boolean isFolder) {
-        boolean contains(double mx, double my) {
-            return mx >= x && mx < x + w && my >= y && my < y + h;
-        }
-    }
-
     private List<File> allSounds = new ArrayList<>();
-    private final List<Slot> slots = new ArrayList<>();
-    private Slot hovered;
+    /** Entries on the current page, one per slice (null = empty slice). */
+    private final List<File> slots = new ArrayList<>();
+    private PieWheel wheel;
+    private int hovered = -1;
 
     public SoundWheelOverlay() {
         super(Component.translatable("key.opensoundboard.wheel"));
@@ -65,42 +59,25 @@ public class SoundWheelOverlay extends OsbScreen {
     // ---------------------------------------------------------------- data
 
     private void loadSounds() {
-        File soundDir = OpenSoundboardClient.soundDir;
         allSounds = new ArrayList<>();
         if (SoundboardConfig.data.isWheelCustomLayout()) {
             int total = perPage();
             WheelLayoutConfig.resize(total);
             for (int i = 0; i < total; i++) {
-                String nm = WheelLayoutConfig.get(i);
-                File f = (nm != null && !nm.isBlank()) ? new File(soundDir, nm) : null;
-                allSounds.add(f != null && f.exists() ? f : null);
+                allSounds.add(SoundLibrary.find(WheelLayoutConfig.get(i)));
             }
             return;
         }
-        if (currentFolder != null) {
-            allSounds.add(new File(soundDir, BACK));
-            addSorted(currentFolder.listFiles((d, n) -> n.endsWith(".mp3")));
-        } else {
-            if (SoundboardConfig.data.isShowSubfolders()) {
-                File[] subs = soundDir.listFiles(File::isDirectory);
-                if (subs != null) {
-                    Arrays.sort(subs, Comparator.comparing(File::getName));
-                    for (File s : subs) {
-                        File[] m = s.listFiles((d, n) -> n.endsWith(".mp3"));
-                        if (m != null && m.length > 0) allSounds.add(s);
-                    }
-                }
-            }
-            addSorted(soundDir.listFiles((d, n) -> n.endsWith(".mp3")));
+        if (!SoundboardConfig.data.isShowSubfolders() || (currentFolder != null && !SoundLibrary.isInside(currentFolder))) {
+            currentFolder = null;
         }
-    }
-
-    private void addSorted(File[] files) {
-        if (files == null) return;
-        Arrays.stream(files)
+        File dir = currentFolder != null ? currentFolder : SoundLibrary.root();
+        if (currentFolder != null) allSounds.add(new File(dir, BACK));
+        if (SoundboardConfig.data.isShowSubfolders()) allSounds.addAll(SoundLibrary.folders(dir));
+        SoundLibrary.sounds(dir).stream()
                 .filter(f -> !SoundboardConfig.data.isWheelFavoritesOnly() || SoundboardConfig.get(f.getName()).isFavorite())
                 .sorted(Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite()).reversed()
-                        .thenComparing(File::getName))
+                        .thenComparing(f -> f.getName().toLowerCase()))
                 .forEach(allSounds::add);
     }
 
@@ -125,75 +102,61 @@ public class SoundWheelOverlay extends OsbScreen {
         slots.clear();
         List<File> pageSounds = currentPageSounds();
         int num = perPage();
-        int cx = this.width / 2;
-        int cy = this.height / 2;
-        for (int i = 0; i < num; i++) {
-            int[] pos = WheelLayout.buttonPos(i, num, cx, cy, BUTTON_W, BUTTON_H, CENTER_W, this.width, this.height);
-            File f = i < pageSounds.size() ? pageSounds.get(i) : null;
-            if (f == null) {
-                slots.add(null);
-                continue;
-            }
-            slots.add(new Slot(pos[0], pos[1], BUTTON_W, BUTTON_H, f, f.getName().equals(BACK), f.isDirectory()));
+        for (int i = 0; i < num; i++) slots.add(i < pageSounds.size() ? pageSounds.get(i) : null);
+        if (wheel == null || wheel.count != num || wheel.cx != this.width / 2 || wheel.cy != this.height / 2) {
+            wheel = PieWheel.fit(this.width, this.height, num, 0, 0);
         }
+    }
+
+    private static boolean isBack(File file) {
+        return file != null && file.getName().equals(BACK);
     }
 
     // ---------------------------------------------------------------- render
 
     @Override
     protected void renderContent(UiCanvas c) {
-        int cx = this.width / 2;
-        int cy = this.height / 2;
-        if (useCustomBackground()) {
-            c.fillRect(0, 0, this.width, this.height, 0x66000000);
-        }
+        if (!vanilla()) c.fillRect(0, 0, this.width, this.height, 0x50000000);
+        if (wheel == null) rebuild();
 
-        hovered = null;
-        for (Slot s : slots) {
-            if (s != null && s.contains(c.mouseX, c.mouseY)) hovered = s;
-        }
+        int index = wheel.sliceAt(c.mouseX, c.mouseY);
+        hovered = index >= 0 && index < slots.size() && slots.get(index) != null ? index : -1;
 
-        if (currentFolder != null) {
-            c.centeredText(Component.literal(currentFolder.getName()), cx, cy - BUTTON_H / 2 - 14, 0xFFF0C044);
-        }
+        List<PieWheel.Slice> slices = new ArrayList<>();
+        for (File file : slots) slices.add(slice(file));
 
-        if (useCustomBackground()) {
-            c.fillRoundRect(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.PANEL);
-            c.roundBorder(cx - CENTER_W / 2, cy - BUTTON_H / 2, CENTER_W, BUTTON_H, Theme.BORDER);
+        String title;
+        if (hovered >= 0) {
+            title = slices.get(hovered).label();
+        } else if (currentFolder != null) {
+            title = currentFolder.getName();
+        } else {
+            title = Component.translatable(allSounds.isEmpty() ? "gui.opensoundboard.wheel.empty" : "gui.opensoundboard.library_root").getString();
         }
-        String center = allSounds.isEmpty()
-                ? Component.translatable("gui.opensoundboard.wheel.empty").getString()
-                : Component.translatable("gui.opensoundboard.wheel.page", String.valueOf(page + 1), String.valueOf(totalPages())).getString();
-        c.centeredText(Component.literal(center), cx, cy - 4, Theme.TEXT_MUTED);
-
-        for (Slot s : slots) {
-            if (s != null) drawSlot(c, s, s == hovered);
-        }
+        String subtitle = totalPages() > 1
+                ? Component.translatable("gui.opensoundboard.wheel.page", String.valueOf(page + 1), String.valueOf(totalPages())).getString()
+                : null;
+        wheel.render(c, slices, hovered, title, subtitle);
     }
 
-    private void drawSlot(UiCanvas c, Slot s, boolean hov) {
-        int bg;
-        int color;
-        String text;
-        if (s.isBack) {
-            bg = hov ? Theme.BTN_HOVER : Theme.BTN;
-            text = "← " + (currentFolder != null ? currentFolder.getName() : "");
-            color = Theme.TEXT_MUTED;
-        } else if (s.isFolder) {
-            bg = hov ? Theme.BTN_HOVER : Theme.BTN;
-            text = "📁 " + s.file.getName();
-            color = 0xFFF0C044;
-        } else {
-            boolean fav = SoundboardConfig.get(s.file.getName()).isFavorite();
-            boolean playing = SoundboardAudioSystem.isPlaying(s.file.getName());
-            bg = hov ? Theme.ACCENT_HOVER : (playing ? 0xFF2E7D32 : Theme.BTN);
-            text = (fav ? "★ " : "") + GuiTools.baseName(s.file) + (playing ? " ▶" : "");
-            color = fav ? 0xFFF5D76A : (playing ? 0xFFB6E3B8 : Theme.TEXT);
+    private PieWheel.Slice slice(File file) {
+        if (file == null) return PieWheel.Slice.empty("");
+        if (isBack(file)) {
+            File parent = currentFolder != null ? currentFolder.getParentFile() : null;
+            String text = SoundLibrary.isInside(parent)
+                    ? parent.getName()
+                    : Component.translatable("gui.opensoundboard.library_root").getString();
+            int color = vanilla() ? UiStyle.VANILLA_TEXT_MUTED : Theme.textMuted;
+            return new PieWheel.Slice(Icons.BACK, color, text, false, false);
         }
-        c.fillRoundRect(s.x, s.y, s.w, s.h, bg);
-        c.roundBorder(s.x, s.y, s.w, s.h, hov ? Theme.ACCENT : Theme.BORDER);
-        c.centeredText(Component.literal(GuiTools.trimName(this.font, text, s.w - 8)),
-                s.x + s.w / 2, c.centeredTextY(s.y, s.h), color);
+        if (file.isDirectory()) {
+            return new PieWheel.Slice(Icons.FOLDER, Theme.FOLDER, file.getName(), false, false);
+        }
+        boolean fav = SoundboardConfig.get(file.getName()).isFavorite();
+        boolean playing = SoundboardAudioSystem.isPlaying(file.getName());
+        Icons icon = playing ? Icons.NOTE : (fav ? Icons.STAR : null);
+        int iconColor = playing ? (vanilla() ? 0xFFFFFF55 : Theme.accent) : Theme.FAVORITE;
+        return new PieWheel.Slice(icon, iconColor, GuiTools.baseName(file), false, playing);
     }
 
     // ---------------------------------------------------------------- input
@@ -209,7 +172,7 @@ public class SoundWheelOverlay extends OsbScreen {
 
     @Override
     protected boolean screenKeyPressed(int key, int scan, int mods) {
-        if (key == GLFW.GLFW_KEY_ESCAPE) {
+        if (key == Keys.ESCAPE) {
             close();
             return true;
         }
@@ -219,18 +182,20 @@ public class SoundWheelOverlay extends OsbScreen {
     /** Click a folder/back slot while holding to navigate (stays open). */
     @Override
     protected boolean screenMouseClicked(double mx, double my, int button) {
-        if (button != 0 || hovered == null) return false;
-        if (hovered.isBack) {
-            currentFolder = null;
-            SoundboardConfig.saveLastOpenedFolder(null);
+        if (button != 0 || hovered < 0) return false;
+        File target = slots.get(hovered);
+        if (isBack(target)) {
+            File parent = currentFolder != null ? currentFolder.getParentFile() : null;
+            currentFolder = SoundLibrary.isInside(parent) ? parent : null;
+            SoundboardConfig.saveLastOpenedFolder(currentFolder == null ? null : SoundLibrary.relativePath(currentFolder));
             page = 0;
             loadSounds();
             rebuild();
             return true;
         }
-        if (hovered.isFolder) {
-            currentFolder = hovered.file;
-            SoundboardConfig.saveLastOpenedFolder(hovered.file);
+        if (target.isDirectory()) {
+            currentFolder = target;
+            SoundboardConfig.saveLastOpenedFolder(SoundLibrary.relativePath(target));
             page = 0;
             loadSounds();
             rebuild();
@@ -241,8 +206,9 @@ public class SoundWheelOverlay extends OsbScreen {
 
     /** Called by the client when the wheel key is released: play the hovered sound, then close. */
     public void playHoveredAndClose() {
-        if (hovered != null && !hovered.isBack && !hovered.isFolder) {
-            playSound(hovered.file);
+        File target = hovered >= 0 && hovered < slots.size() ? slots.get(hovered) : null;
+        if (target != null && !isBack(target) && !target.isDirectory()) {
+            playSound(target);
         }
         close();
     }
@@ -273,10 +239,5 @@ public class SoundWheelOverlay extends OsbScreen {
 
     private void close() {
         McCompat.setScreen(this.minecraft, null);
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 }

@@ -25,7 +25,7 @@ public final class YouTubeDownloadManager {
         CANCELLED
     }
 
-    public record Snapshot(State state, int progress, List<String> logLines, int revision) {
+    public record Snapshot(State state, int progress, List<String> logLines, int revision, String url) {
         public boolean active() {
             return state == State.PREPARING || state == State.DOWNLOADING || state == State.CANCELLING;
         }
@@ -47,11 +47,13 @@ public final class YouTubeDownloadManager {
     private static int progress;
     private static int revision;
     private static int lastToastBucket = -1;
+    private static String currentUrl;
 
     private YouTubeDownloadManager() {
     }
 
-    public static boolean start(String url) {
+    /** Start downloading {@code url} into {@code targetDir} (the main sounds folder when null). */
+    public static boolean start(String url, java.io.File targetDir) {
         if (url == null || url.isBlank()) return false;
         synchronized (LOCK) {
             if (isActive(state)) return false;
@@ -60,13 +62,14 @@ public final class YouTubeDownloadManager {
             cancelRequested = false;
             progress = 0;
             lastToastBucket = -1;
+            currentUrl = url;
             LOG_LINES.clear();
             addLogLocked("> " + Component.translatable("message.opensoundboard.youtube.downloading").getString());
             revision++;
         }
 
         DownloadToast.preparing(0);
-        EXECUTOR.execute(() -> runDownload(url));
+        EXECUTOR.execute(() -> runDownload(url, targetDir));
         return true;
     }
 
@@ -87,13 +90,14 @@ public final class YouTubeDownloadManager {
 
     public static Snapshot snapshot() {
         synchronized (LOCK) {
-            return new Snapshot(state, progress, List.copyOf(LOG_LINES), revision);
+            return new Snapshot(state, progress, List.copyOf(LOG_LINES), revision, currentUrl);
         }
     }
 
-    private static void runDownload(String url) {
+    private static void runDownload(String url, java.io.File targetDir) {
         YtDlpManager.DownloadResult result = YtDlpManager.downloadUrlIntoSoundDir(
                 url,
+                targetDir,
                 true,
                 YouTubeDownloadManager::onOutput,
                 YouTubeDownloadManager::onProcessStart

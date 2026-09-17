@@ -61,6 +61,7 @@ dependencyResolutionManagement {
         maven("https://maven.parchmentmc.org")
         maven("https://maven.terraformersmc.com/")   // Mod Menu
         maven("https://maven.maxhenkel.de/repository/public")  // Simple Voice Chat
+        maven("https://repo.plasmoverse.com/releases")         // Plasmo Voice API
         maven("https://api.modrinth.com/maven") {
             content { includeGroup("maven.modrinth") }
         }

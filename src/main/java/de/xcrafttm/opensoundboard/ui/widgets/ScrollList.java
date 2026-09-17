@@ -1,14 +1,17 @@
 package de.xcrafttm.opensoundboard.ui.widgets;
 
+import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.UiSound;
+import de.xcrafttm.opensoundboard.ui.UiStyle;
 import de.xcrafttm.opensoundboard.ui.Widget;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Vertical scrolling list of {@link Row}s. Clips content with a scissor rectangle, draws a slim
- * indigo scrollbar, and routes clicks/scroll to the visible rows. Screens supply their own rows.
+ * Vertical scrolling list of {@link Row}s. Clips content with a scissor rectangle, draws a
+ * scrollbar, and routes clicks/scroll to the visible rows. Screens supply their own rows.
  */
 public class ScrollList extends Widget {
 
@@ -29,8 +32,9 @@ public class ScrollList extends Widget {
 
     private final List<Row> rows = new ArrayList<>();
     private int scroll = 0;
-    private int rowGap = 2;
-    private int background = 0x66000000;
+    private int rowGap = 1;
+    private boolean framed = true;
+    private String emptyText = null;
     private final Scrollbar scrollbar = new Scrollbar();
 
     public ScrollList gap(int gap) {
@@ -38,8 +42,15 @@ public class ScrollList extends Widget {
         return this;
     }
 
-    public ScrollList background(int argb) {
-        this.background = argb;
+    /** Whether the modern style draws a recessed field behind the rows (default true). */
+    public ScrollList framed(boolean framed) {
+        this.framed = framed;
+        return this;
+    }
+
+    /** Message shown centered while the list has no rows. */
+    public ScrollList emptyText(String emptyText) {
+        this.emptyText = emptyText;
         return this;
     }
 
@@ -58,7 +69,11 @@ public class ScrollList extends Widget {
     private int contentHeight() {
         int total = 0;
         for (Row r : rows) total += r.height() + rowGap;
-        return Math.max(0, total - rowGap);
+        return Math.max(0, total - rowGap) + inset() * 2;
+    }
+
+    private int inset() {
+        return framed && !UiStyle.useVanillaComponents() ? 2 : 0;
     }
 
     private int maxScroll() {
@@ -69,32 +84,80 @@ public class ScrollList extends Widget {
         scroll = 0;
     }
 
+    public void scrollToBottom() {
+        scroll = maxScroll();
+    }
+
+    public boolean isAtBottom() {
+        return scroll >= maxScroll() - 2;
+    }
+
+    private int rowWidth() {
+        return w - inset() * 2 - Scrollbar.reservedWidth(h, contentHeight());
+    }
+
     @Override
     public void draw(UiCanvas c) {
-        c.fillRoundRect(x, y, w, h, background);
-        c.pushScissor(x, y, w, h);
-        int ry = y - scroll;
+        scroll = Math.max(0, Math.min(scroll, maxScroll()));
+        if (framed && !UiStyle.useVanillaComponents()) {
+            c.fillRoundRect(x, y, w, h, Theme.field);
+            c.roundBorder(x, y, w, h, Theme.border);
+        }
+
+        int rx = x + inset();
+        int rw = rowWidth();
+        c.pushScissor(x + 1, y + 1, w - 2, h - 2);
+        int ry = y + inset() - scroll;
         for (Row r : rows) {
             int rh = r.height();
             if (ry + rh >= y && ry <= y + h) {
-                boolean hovered = c.mouseX >= x && c.mouseX < x + w
+                boolean hovered = c.mouseX >= rx && c.mouseX < rx + rw
                         && c.mouseY >= Math.max(y, ry) && c.mouseY < Math.min(y + h, ry + rh);
-                r.draw(c, x, ry, w, hovered);
+                r.draw(c, rx, ry, rw, hovered);
             }
             ry += rh + rowGap;
+        }
+        if (rows.isEmpty() && emptyText != null) {
+            int color = UiStyle.useVanillaComponents() ? UiStyle.VANILLA_TEXT_MUTED : Theme.textMuted;
+            c.centeredText(c.trimText(emptyText, w - 12), x + w / 2, y + h / 2 - c.lineHeight() / 2, color);
         }
         c.popScissor();
 
         scrollbar.draw(c, x, y, w, h, contentHeight(), scroll);
     }
 
+    /**
+     * Shared row chrome: the modern style uses a soft fill plus an accent bar for the selected
+     * row; the vanilla style uses Minecraft's list selection outline.
+     */
+    public static void drawRowBackground(UiCanvas c, int rx, int ry, int rw, int rh, boolean selected, boolean hovered) {
+        if (UiStyle.useVanillaComponents()) {
+            if (selected) {
+                c.fillRect(rx, ry, rw, rh, 0xFFFFFFFF);
+                c.fillRect(rx + 1, ry + 1, rw - 2, rh - 2, 0xFF000000);
+            } else if (hovered) {
+                c.fillRect(rx, ry, rw, rh, 0x28FFFFFF);
+            }
+            return;
+        }
+        if (selected) {
+            c.fillRect(rx, ry, rw, rh, Theme.surfaceHover);
+            c.fillRect(rx, ry, 2, rh, Theme.accent);
+        } else if (hovered) {
+            c.fillRect(rx, ry, rw, rh, Theme.surface);
+        }
+    }
+
     @Override
     public String tooltipAt(double mx, double my) {
         if (!contains(mx, my)) return null;
-        int ry = y - scroll;
+        int rx = x + inset();
+        int rw = rowWidth();
+        if (mx >= rx + rw) return null;
+        int ry = y + inset() - scroll;
         for (Row r : rows) {
             int rh = r.height();
-            if (my >= ry && my < ry + rh && my >= y && my < y + h) return r.tooltip(mx, x, w);
+            if (my >= ry && my < ry + rh) return r.tooltip(mx, rx, rw);
             ry += rh + rowGap;
         }
         return null;
@@ -104,7 +167,7 @@ public class ScrollList extends Widget {
     public boolean mouseScrolled(double mx, double my, double amount) {
         int ms = maxScroll();
         if (ms <= 0) return false;
-        scroll = Math.max(0, Math.min(ms, scroll - (int) (amount * 16)));
+        scroll = Math.max(0, Math.min(ms, scroll - (int) (amount * 18)));
         return true;
     }
 
@@ -115,12 +178,14 @@ public class ScrollList extends Widget {
                 value -> scroll = value)) {
             return true;
         }
-        int ry = y - scroll;
+        int rx = x + inset();
+        int rw = rowWidth();
+        int ry = y + inset() - scroll;
         for (Row r : rows) {
             int rh = r.height();
-            if (my >= ry && my < ry + rh && my >= y && my < y + h) {
-                if (r.click(mx, my, x, ry, w, button)) {
-                    de.xcrafttm.opensoundboard.ui.UiSound.click();
+            if (my >= ry && my < ry + rh) {
+                if (r.click(mx, my, rx, ry, rw, button)) {
+                    UiSound.click();
                     return true;
                 }
                 return false;

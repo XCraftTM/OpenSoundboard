@@ -1,13 +1,14 @@
 package de.xcrafttm.opensoundboard.screens;
 
-import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
-import de.xcrafttm.opensoundboard.tools.GuiTools;
 import de.xcrafttm.opensoundboard.tools.McCompat;
+import de.xcrafttm.opensoundboard.tools.SoundLibrary;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
+import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.UiStyle;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
 import de.xcrafttm.opensoundboard.ui.widgets.ScrollList;
 import de.xcrafttm.opensoundboard.ui.widgets.TextField;
@@ -15,25 +16,16 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 import java.io.File;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-/** Full-screen picker used by the wheel editor: search + list with a ▶ preview per row. */
+/** Picker used by the wheel editor: search + list with a preview button per row. */
 public class SongPickerScreen extends OsbScreen {
-
-    private static final int PREVIEW_W = 24;
-    private static final int ROW_H = 18;
 
     private final Screen parent;
     private final Consumer<String> onPick;
-
-    private int px;
-    private int py;
-    private int pw;
-    private int ph;
 
     private TextField search;
     private ScrollList list;
@@ -50,73 +42,69 @@ public class SongPickerScreen extends OsbScreen {
 
     @Override
     protected void buildUi() {
-        ph = screenBoxHeight();
-        pw = screenBoxWidth(360);
-        px = (this.width - pw) / 2;
-        py = (this.height - ph) / 2;
-        int cx = px + Theme.PAD;
-        int cw = pw - Theme.PAD * 2;
-        int y = py + 26;
+        boolean vanilla = vanilla();
+        int ctl = UiStyle.controlHeight();
+        int gap = vanilla ? 4 : Theme.GAP;
+        layoutFrame(360, 0);
 
-        search = add(new TextField().placeholder(Component.translatable("gui.opensoundboard.search_hint").getString())
+        int y = bodyY;
+        String query = search != null ? search.getText() : "";
+        search = add(new TextField().icon(Icons.SEARCH).placeholder(tip("gui.opensoundboard.search_hint"))
                 .onChange(s -> buildList()));
-        search.bounds(cx, y, cw - 76, 18);
-        add(new Button(Component.literal("✕ ").append(Component.translatable("gui.opensoundboard.wheel.picker.clear")),
-                b -> pick(null)).secondary()).bounds(cx + cw - 70, y, 70, 18);
-        y += 24;
+        search.setText(query);
 
-        list = add(new ScrollList().gap(2));
-        list.bounds(cx, y, cw, py + ph - Theme.PAD - y);
+        Button clear = new Button(Component.translatable("gui.opensoundboard.wheel.picker.clear"), b -> pick(null)).secondary();
+        clear.tooltip(tip("tooltip.opensoundboard.wheel.picker.clear"));
+        if (vanilla) {
+            search.bounds(bodyX, y, bodyW, ctl);
+            layoutFooter(add(clear), add(new Button(Component.translatable("gui.cancel"), b -> onClose())));
+        } else {
+            int clearW = 70;
+            search.bounds(bodyX, y, bodyW - clearW - gap, ctl);
+            add(clear).bounds(bodyX + bodyW - clearW, y, clearW, ctl);
+            addHeaderButton(Icons.CLOSE, tip("gui.cancel"), this::onClose);
+        }
+        y += ctl + gap + 2;
+
+        list = add(new ScrollList().framed(true).gap(vanilla ? 2 : 1));
+        list.emptyText(tip("gui.opensoundboard.no_results"));
+        list.bounds(bodyX, y, bodyW, bodyY + bodyH - y);
         buildList();
-
-        add(new Button(Component.literal("✕"), b -> closeWithoutPick()).secondary())
-                .bounds(px + pw - 22, py + 3, 18, 16).tooltip(Component.translatable("gui.cancel").getString());
     }
 
     private void buildList() {
         list.clearRows();
         String query = search == null ? "" : search.getText().trim().toLowerCase();
-        File[] files = OpenSoundboardClient.soundDir.listFiles((d, n) -> n.endsWith(".mp3"));
-        if (files == null) files = new File[0];
-        List<File> sorted = Arrays.stream(files)
+        List<File> sorted = SoundLibrary.allSounds(SoundLibrary.root()).stream()
                 .filter(f -> f.getName().toLowerCase().contains(query))
                 .sorted(Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite()).reversed()
-                        .thenComparing(File::getName))
+                        .thenComparing(f -> f.getName().toLowerCase()))
                 .collect(Collectors.toList());
         for (File f : sorted) list.addRow(row(f));
     }
 
     private ScrollList.Row row(File file) {
         final String name = file.getName();
+        final String folderHint = SoundLibrary.folderOf(file);
         return new ScrollList.Row() {
             public int height() {
-                return ROW_H;
+                return SoundRows.rowHeight();
             }
 
             public void draw(UiCanvas c, int rx, int ry, int rw, boolean hovered) {
-                boolean fav = SoundboardConfig.get(name).isFavorite();
-                boolean previewing = name.equals(previewingName);
-                if (hovered) c.fillRoundRect(rx, ry, rw, ROW_H, Theme.ROW);
-                c.fillRoundRect(rx + 3, ry + 2, PREVIEW_W, ROW_H - 4, previewing ? 0xFFB23A3A : Theme.BTN);
-                int textY = c.centeredTextY(ry, ROW_H);
-                c.centeredText(Component.literal(previewing ? "⏹" : "▶"), rx + 3 + PREVIEW_W / 2, textY,
-                        previewing ? Theme.TEXT_ON_ACCENT : Theme.TEXT);
-                int nameX = rx + PREVIEW_W + 10;
-                String label = (fav ? "★ " : "") + GuiTools.baseName(file);
-                c.text(GuiTools.trimName(font, label, rw - (nameX - rx) - 6), nameX, textY,
-                        fav ? 0xFF8B85F0 : Theme.TEXT);
+                SoundRows.drawSound(c, file, rx, ry, rw, height(), false, hovered, true, folderHint);
             }
 
             public boolean click(double mx, double my, int rx, int ry, int rw, int button) {
                 if (button != 0) return false;
-                if (mx < rx + 3 + PREVIEW_W) togglePreview(file);
+                if (SoundRows.inPlayZone(mx, rx)) togglePreview(file);
                 else pick(name);
                 return true;
             }
 
             public String tooltip(double mx, int rx, int rw) {
-                if (mx < rx + 3 + PREVIEW_W) return Component.translatable("gui.opensoundboard.wheel.picker.preview").getString();
-                return GuiTools.baseName(file);
+                if (SoundRows.inPlayZone(mx, rx)) return tip("gui.opensoundboard.wheel.picker.preview");
+                return tip("tooltip.opensoundboard.wheel.picker.pick");
             }
         };
     }
@@ -168,24 +156,18 @@ public class SongPickerScreen extends OsbScreen {
         McCompat.setScreen(this.minecraft, parent);
     }
 
-    private void closeWithoutPick() {
+    @Override
+    public void onClose() {
         stopPreview();
         McCompat.setScreen(this.minecraft, parent);
     }
 
     @Override
-    public void onClose() {
-        closeWithoutPick();
-    }
-
-    @Override
     protected void renderContent(UiCanvas c) {
-        renderScreenBox(c, px, py, pw, ph);
-        c.centeredText(Component.translatable("gui.opensoundboard.wheel.picker.title"), px + pw / 2, py + 12, Theme.TEXT);
+        renderFrame(c, getTitle().getString());
     }
 
-    @Override
-    public boolean isPauseScreen() {
-        return false;
+    private static String tip(String key) {
+        return Component.translatable(key).getString();
     }
 }

@@ -6,12 +6,13 @@ import de.xcrafttm.opensoundboard.platform.PlatformBootstrap;
 import de.xcrafttm.opensoundboard.screens.SoundWheelOverlay;
 import de.xcrafttm.opensoundboard.screens.SoundboardScreen;
 import de.xcrafttm.opensoundboard.tools.KeybindHandler;
+import de.xcrafttm.opensoundboard.tools.LocalAudioBackend;
+import de.xcrafttm.opensoundboard.tools.Keys;
 import de.xcrafttm.opensoundboard.tools.McCompat;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.KeyMapping;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +21,7 @@ import java.io.File;
 /**
  * Client entrypoint: config, per-sound keybind playback (via {@link KeybindHandler}), and the two
  * rebindable GUI keybinds — open soundboard, and hold-to-open sound wheel. The wheel key is polled
- * directly from GLFW so it can be detected while the overlay screen is open.
+ * directly (see {@link Keys}) so it can be detected while the overlay screen is open.
  */
 public class OpenSoundboardClient implements ClientModInitializer {
 
@@ -32,6 +33,11 @@ public class OpenSoundboardClient implements ClientModInitializer {
     private static KeyMapping openKey;
     private static KeyMapping wheelKey;
 
+    /** The hold-to-open sound wheel key, for showing its binding in the settings. */
+    public static KeyMapping wheelKeyMapping() {
+        return wheelKey;
+    }
+
     @Override
     public void onInitializeClient() {
         PlatformBootstrap.setClient(() -> FabricLoader.getInstance().getConfigDir().toFile());
@@ -42,26 +48,33 @@ public class OpenSoundboardClient implements ClientModInitializer {
 
         SoundboardConfig.load();
 
+        // Voice chats are optional: without one, sounds play locally through LocalAudioBackend.
+        // Simple Voice Chat registers itself through its "voicechat" entrypoint (SoundboardPlugin).
+        LocalAudioBackend.start();
+        if (FabricLoader.getInstance().isModLoaded("plasmovoice")) {
+            de.xcrafttm.opensoundboard.integration.plasmo.PlasmoVoiceBackend.register();
+        }
+
         KeyMapping openKm;
         KeyMapping wheelKm;
         // Keybind category: a String before 1.21.11, a registered Category (Identifier) after.
         //? if >=1.21.11 {
         KeyMapping.Category category = KeyMapping.Category.register(net.minecraft.resources.Identifier.fromNamespaceAndPath(MOD_ID, "general"));
-        openKm = new KeyMapping("key.opensoundboard.open", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_U, category);
-        wheelKm = new KeyMapping("key.opensoundboard.wheel", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, category);
+        openKm = new KeyMapping("key.opensoundboard.open", Keys.keyboardType(), Keys.U, category);
+        wheelKm = new KeyMapping("key.opensoundboard.wheel", Keys.keyboardType(), Keys.unknownKey(), category);
         //?} else {
-        /*openKm = new KeyMapping("key.opensoundboard.open", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_U, "category.opensoundboard.general");
-        wheelKm = new KeyMapping("key.opensoundboard.wheel", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "category.opensoundboard.general");
+        /*openKm = new KeyMapping("key.opensoundboard.open", Keys.keyboardType(), Keys.U, "category.opensoundboard.general");
+        wheelKm = new KeyMapping("key.opensoundboard.wheel", Keys.keyboardType(), Keys.unknownKey(), "category.opensoundboard.general");
         *///?}
 
         // Fabric renamed KeyBindingHelper -> KeyMappingHelper for the 26.x API.
         //? if >=26 {
-        /*openKey = net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping(openKm);
+        openKey = net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping(openKm);
         wheelKey = net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper.registerKeyMapping(wheelKm);
-        *///?} else {
-        openKey = net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper.registerKeyBinding(openKm);
+        //?} else {
+        /*openKey = net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper.registerKeyBinding(openKm);
         wheelKey = net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper.registerKeyBinding(wheelKm);
-        //?}
+        *///?}
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             KeybindHandler.tick(client, soundDir);
@@ -71,13 +84,7 @@ public class OpenSoundboardClient implements ClientModInitializer {
             }
 
             // Poll the wheel key's bound key directly so we can detect hold while the overlay is open.
-            long window = McCompat.windowHandle(client);
-            InputConstants.Key bound = InputConstants.getKey(wheelKey.saveString());
-            int wheelCode = bound.getValue();
-            boolean wheelHeld = wheelCode != GLFW.GLFW_KEY_UNKNOWN
-                    && (bound.getType() == InputConstants.Type.MOUSE
-                    ? GLFW.glfwGetMouseButton(window, wheelCode) == GLFW.GLFW_PRESS
-                    : GLFW.glfwGetKey(window, wheelCode) == GLFW.GLFW_PRESS);
+            boolean wheelHeld = !wheelKey.isUnbound() && Keys.isDown(InputConstants.getKey(wheelKey.saveString()));
 
             if (McCompat.screen(client) == null && wheelHeld) {
                 McCompat.setScreen(client, new SoundWheelOverlay());

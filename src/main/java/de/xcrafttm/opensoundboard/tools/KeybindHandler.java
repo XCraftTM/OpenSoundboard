@@ -2,15 +2,14 @@ package de.xcrafttm.opensoundboard.tools;
 
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Polls raw GLFW state for the per-sound keybinds configured by the user and triggers
- * playback. Fully Mojang-mapped; the one window-handle rename is hidden in {@link McCompat}.
+ * Polls raw key state (see {@link Keys}) for the per-sound keybinds configured by the user and triggers
+ * playback. Version differences in key polling are hidden in {@link Keys}.
  */
 public final class KeybindHandler {
 
@@ -25,22 +24,20 @@ public final class KeybindHandler {
             return;
         }
 
-        long window = McCompat.windowHandle(client);
-
         for (var entry : SoundboardConfig.sounds().entrySet()) {
             SoundboardConfig.KeyBind keybind = entry.getValue().getKeybind();
             if (keybind == null) continue;
 
-            boolean keyDown = GLFW.glfwGetKey(window, keybind.getKeyCode()) == GLFW.GLFW_PRESS;
-            boolean modsMatch = modifiersMatch(window, keybind.getModifiers());
+            boolean keyDown = Keys.isKeyDown(keybind.getKeyCode());
+            boolean modsMatch = modifiersMatch(keybind.getModifiers());
 
             String name = entry.getKey();
 
             if (keyDown && modsMatch) {
                 if (!heldKeybinds.contains(name)) {
                     heldKeybinds.add(name);
-                    File file = new File(soundDir, name);
-                    if (file.exists()) {
+                    File file = SoundLibrary.find(name);
+                    if (file != null) {
                         SoundboardConfig.SoundData data = entry.getValue();
                         String mode = SoundboardConfig.data.getKeybindMode();
                         boolean isPlaying = SoundboardAudioSystem.isPlaying(name);
@@ -79,18 +76,10 @@ public final class KeybindHandler {
         }
     }
 
-    private static boolean modifiersMatch(long window, int expected) {
-        boolean ctrlExpected = (expected & GLFW.GLFW_MOD_CONTROL) != 0;
-        boolean shiftExpected = (expected & GLFW.GLFW_MOD_SHIFT) != 0;
-        boolean altExpected = (expected & GLFW.GLFW_MOD_ALT) != 0;
-
-        boolean ctrlDown = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
-        boolean shiftDown = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
-        boolean altDown = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_ALT) == GLFW.GLFW_PRESS
-                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_ALT) == GLFW.GLFW_PRESS;
-
-        return ctrlExpected == ctrlDown && shiftExpected == shiftDown && altExpected == altDown;
+    private static boolean modifiersMatch(int expected) {
+        boolean ctrlExpected = (expected & Keys.MOD_CONTROL) != 0;
+        boolean shiftExpected = (expected & Keys.MOD_SHIFT) != 0;
+        boolean altExpected = (expected & Keys.MOD_ALT) != 0;
+        return ctrlExpected == Keys.controlDown() && shiftExpected == Keys.shiftDown() && altExpected == Keys.altDown();
     }
 }

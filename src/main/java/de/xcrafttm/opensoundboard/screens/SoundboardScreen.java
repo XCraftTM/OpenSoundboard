@@ -3,56 +3,48 @@ package de.xcrafttm.opensoundboard.screens;
 import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
+import de.xcrafttm.opensoundboard.tools.Keys;
 import de.xcrafttm.opensoundboard.tools.McCompat;
+import de.xcrafttm.opensoundboard.tools.SoundLibrary;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
+import de.xcrafttm.opensoundboard.tools.VoiceBackend;
 import de.xcrafttm.opensoundboard.tools.YtDlpManager;
+import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
+import de.xcrafttm.opensoundboard.ui.UiStyle;
 import de.xcrafttm.opensoundboard.ui.Widget;
+import de.xcrafttm.opensoundboard.ui.widgets.Breadcrumbs;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
 import de.xcrafttm.opensoundboard.ui.widgets.ScrollList;
 import de.xcrafttm.opensoundboard.ui.widgets.Slider;
-import de.xcrafttm.opensoundboard.ui.widgets.SplitButton;
 import de.xcrafttm.opensoundboard.ui.widgets.TextField;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Main soundboard screen: search, toolbar (refresh / folder / config / youtube / sort), a
- * scrollable folder+sound list, and a details pane for the selected sound (volume, keybind,
- * timeline, transport, set-start). Reproduces the behaviour of the old owo screen on the
- * custom flat-indigo toolkit.
+ * Main soundboard screen: search and sorting, a scrollable folder + sound list, and a details
+ * area for the selected sound (volumes, keybind, timeline, transport, start point).
  */
 public class SoundboardScreen extends OsbScreen {
 
-    private static final int STAR_W = 14;
-    private static final int PLAY_W = 28;
-    private static final int ROW_H = 18;
-
-    private static final String BACK = "__BACK__";
+    private static final long DOUBLE_CLICK_MS = 300;
 
     private static File currentFolder = null;
 
-    private int px;
-    private int py;
-    private int pw;
-    private int ph;
-    private int cx;
-    private int cw;
-
     private TextField search;
     private ScrollList list;
-    private SplitButton sortBtn;
+    private Button sortModeBtn;
+    private Button sortDirBtn;
 
     // details
+    private final List<Widget> details = new ArrayList<>();
     private Slider localSlider;
     private Slider playerSlider;
     private Button bindBtn;
@@ -62,9 +54,10 @@ public class SoundboardScreen extends OsbScreen {
     private Button loopBtn;
     private int detailsTop;
 
-    private final List<Widget> details = new ArrayList<>();
     private File selected = null;
     private boolean binding = false;
+    private String lastClickedName = null;
+    private long lastClickTime = 0;
 
     private final List<File> results = new ArrayList<>();
 
@@ -74,63 +67,79 @@ public class SoundboardScreen extends OsbScreen {
 
     @Override
     protected void buildUi() {
-        ph = screenBoxHeight();
-        pw = screenBoxWidth(420);
-        px = (this.width - pw) / 2;
-        py = (this.height - ph) / 2;
-        cx = px + Theme.PAD;
-        cw = pw - Theme.PAD * 2;
-
+        details.clear();
         if (currentFolder == null) {
             currentFolder = SoundboardConfig.resolveLastOpenedFolder(OpenSoundboardClient.soundDir);
         }
+        if (!SoundboardConfig.data.isShowSubfolders() || (currentFolder != null && !SoundLibrary.isInside(currentFolder))) {
+            currentFolder = null;
+        }
 
-        int y = py + 26;
-        search = add(new TextField().placeholder("Search sounds...").onChange(s -> scanSounds()));
-        search.bounds(cx, y, cw, 18);
-        y += 24;
+        boolean vanilla = vanilla();
+        int ctl = UiStyle.controlHeight();
+        int gap = vanilla ? 4 : Theme.GAP;
+        layoutFrame(430, 0);
 
-        // Toolbar: 4 action buttons + a sort split button (2 units wide)
-        int gap = 4;
-        int unit = (cw - gap * 5) / 6;
-        int bx = cx;
-        add(new Button(icon("🔄", "gui.opensoundboard.refresh"), b -> refresh()).secondary())
-                .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.refresh"));
-        bx += unit + gap;
-        add(new Button(icon("📁", "gui.opensoundboard.folder"),
-                b -> McCompat.openFolder(OpenSoundboardClient.soundDir)).secondary())
-                .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.folder"));
-        bx += unit + gap;
-        add(new Button(icon("⚙", "gui.opensoundboard.config"),
-                b -> McCompat.setScreen(this.minecraft, new SoundboardConfigScreen(this))).secondary())
-                .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.config"));
-        bx += unit + gap;
-        add(new Button(icon("⬇", "gui.opensoundboard.youtube"),
-                b -> McCompat.setScreen(this.minecraft, new YouTubeScreen(this))).secondary())
-                .bounds(bx, y, unit, 18).tooltip(tip("tooltip.opensoundboard.youtube"));
-        bx += unit + gap;
-        sortBtn = add(new SplitButton(0.25f, sortDirLabel(), this::toggleSortDir, sortModeLabel(), this::cycleSortMode));
-        sortBtn.bounds(bx, y, unit * 2 + gap, 18);
-        sortBtn.tooltip(tip("tooltip.opensoundboard.sortDir") + "\n" + tip("tooltip.opensoundboard.sortMode"));
-        y += 24;
+        if (vanilla) {
+            Button refresh = add(new Button(Component.translatable("gui.opensoundboard.refresh"), b -> refresh()));
+            Button folder = add(new Button(Component.translatable("gui.opensoundboard.folder"),
+                    b -> McCompat.openFolder(OpenSoundboardClient.soundDir)));
+            Button youtube = add(new Button(Component.translatable("gui.opensoundboard.downloader"),
+                    b -> McCompat.setScreen(this.minecraft, new DownloaderScreen(this))));
+            Button settings = add(new Button(Component.translatable("gui.opensoundboard.config"),
+                    b -> McCompat.setScreen(this.minecraft, new SoundboardConfigScreen(this))));
+            Button done = add(new Button(Component.translatable("gui.done"), b -> onClose()));
+            refresh.tooltip(tip("tooltip.opensoundboard.refresh"));
+            folder.tooltip(tip("tooltip.opensoundboard.folder"));
+            youtube.tooltip(tip("tooltip.opensoundboard.youtube"));
+            layoutFooter(refresh, folder, youtube, settings, done);
+        } else {
+            addHeaderButton(Icons.CLOSE, tip("gui.done"), this::onClose);
+            addHeaderButton(Icons.SETTINGS, tip("tooltip.opensoundboard.config"),
+                    () -> McCompat.setScreen(this.minecraft, new SoundboardConfigScreen(this)));
+            addHeaderButton(Icons.DOWNLOAD, tip("tooltip.opensoundboard.youtube"),
+                    () -> McCompat.setScreen(this.minecraft, new DownloaderScreen(this)));
+            addHeaderButton(Icons.FOLDER, tip("tooltip.opensoundboard.folder"),
+                    () -> McCompat.openFolder(OpenSoundboardClient.soundDir));
+            addHeaderButton(Icons.REFRESH, tip("tooltip.opensoundboard.refresh"), this::refresh);
+        }
 
-        // Details block occupies a fixed strip at the bottom of the panel.
-        int detailsH = 82;
-        detailsTop = py + ph - Theme.PAD - detailsH;
-        int listBottom = detailsTop - 14;
+        // Search + sorting
+        int y = bodyY;
+        int dirW = ctl;
+        int modeW = vanilla ? 90 : 64;
+        search = add(new TextField().icon(Icons.SEARCH).placeholder(tip("gui.opensoundboard.search_hint")).onChange(s -> scanSounds()));
+        search.bounds(bodyX, y, bodyW - modeW - dirW - gap * 2, ctl);
+        sortModeBtn = add(new Button(sortModeLabel(), b -> cycleSortMode()).secondary());
+        sortModeBtn.bounds(bodyX + bodyW - dirW - gap - modeW, y, modeW, ctl).tooltip(tip("tooltip.opensoundboard.sortMode"));
+        sortDirBtn = add(new Button(sortDirIcon(), null, b -> toggleSortDir()).secondary());
+        sortDirBtn.bounds(bodyX + bodyW - dirW, y, dirW, ctl).tooltip(tip("tooltip.opensoundboard.sortDir"));
+        y += ctl + gap + 2;
 
-        list = add(new ScrollList().gap(2));
-        list.bounds(cx, y, cw, listBottom - y);
+        // Breadcrumbs while inside a folder
+        if (currentFolder != null) {
+            int crumbH = vanilla ? 14 : 12;
+            int backW = crumbH + 2;
+            add(new Button(Icons.BACK, null, b -> openFolder(currentFolder.getParentFile())).ghost())
+                    .bounds(bodyX, y, backW, crumbH).tooltip(tip("gui.opensoundboard.folder.up"));
+            add(new Breadcrumbs(breadcrumbs())).bounds(bodyX + backW + 4, y, bodyW - backW - 4, crumbH);
+            y += crumbH + gap;
+        }
 
-        buildDetails();
+        // Details block at the bottom of the body
+        int lh = (int) Math.ceil(this.font.lineHeight * UiStyle.fontScale());
+        int detailsH = Math.max(lh, ctl) + gap + ctl + gap + ctl + gap + ctl;
+        detailsTop = bodyY + bodyH - detailsH;
 
-        add(new Button(Component.literal("✕"), b -> onClose()).secondary())
-                .bounds(px + pw - 22, py + 3, 18, 16).tooltip(tip("gui.done"));
+        list = add(new ScrollList().framed(true).gap(vanilla ? 2 : 1));
+        list.bounds(bodyX, y, bodyW, detailsTop - 8 - y);
+
+        buildDetails(ctl, gap, Math.max(lh, ctl));
 
         scanSounds();
         File active = SoundboardAudioSystem.getActiveSoundFile();
-        if (active != null && active.exists()) select(active);
-        else refreshDetails();
+        if (selected == null && active != null && active.exists()) selected = active;
+        refreshDetails();
     }
 
     private <T extends Widget> T detail(T w) {
@@ -139,183 +148,201 @@ public class SoundboardScreen extends OsbScreen {
         return w;
     }
 
-    private void buildDetails() {
-        details.clear();
-        int y = detailsTop + 2;
+    private void buildDetails(int ctl, int gap, int nameLineH) {
         boolean sync = SoundboardConfig.data.isSyncAudio();
-        int bindW = 88;
-        int volW = cw - bindW - 6;
+        int y = detailsTop;
+
+        int bindW = Math.min(130, bodyW / 3);
+        bindBtn = detail(new Button(GuiTools.keyBindLabel(null), b -> startBinding()).secondary());
+        bindBtn.bounds(bodyX + bodyW - bindW, y + (nameLineH - ctl) / 2, bindW, ctl);
+        bindBtn.tooltip(tip("tooltip.opensoundboard.keybind"));
+        y += nameLineH + gap;
 
         localSlider = detail(new Slider(0, v -> onVolume(v, true)).readout(v -> Component.translatable(
-                sync ? "gui.opensoundboard.sync_volume" : "gui.opensoundboard.local_volume",
-                String.valueOf(pct(v)))));
+                sync ? "gui.opensoundboard.sync_volume" : "gui.opensoundboard.local_volume", String.valueOf(pct(v))))
+                .onCommit(v -> SoundboardConfig.save()));
         playerSlider = detail(new Slider(0, v -> onVolume(v, false))
-                .readout(v -> Component.translatable("gui.opensoundboard.player_volume", String.valueOf(pct(v)))));
+                .readout(v -> Component.translatable("gui.opensoundboard.player_volume", String.valueOf(pct(v))))
+                .onCommit(v -> SoundboardConfig.save()));
         if (sync) {
-            localSlider.bounds(cx, y, volW, 18);
-            playerSlider.bounds(cx, y, volW, 18);
+            localSlider.bounds(bodyX, y, bodyW, ctl);
+            playerSlider.bounds(bodyX, y, bodyW, ctl);
             playerSlider.visible = false;
         } else {
-            int half = (volW - 6) / 2;
-            localSlider.bounds(cx, y, half, 18);
-            playerSlider.bounds(cx + half + 6, y, half, 18);
+            int half = (bodyW - gap) / 2;
+            localSlider.bounds(bodyX, y, half, ctl);
+            playerSlider.bounds(bodyX + bodyW - half, y, half, ctl);
         }
-
-        bindBtn = detail(new Button(GuiTools.keyBindLabel(null), b -> startBinding()).secondary());
-        bindBtn.bounds(cx + cw - bindW, y, bindW, 18);
-        bindBtn.tooltip(tip("tooltip.opensoundboard.keybind"));
-        y += 24;
+        localSlider.tooltip(tip("tooltip.opensoundboard.local_volume"));
+        playerSlider.tooltip(tip("tooltip.opensoundboard.player_volume"));
+        y += ctl + gap;
 
         timeline = detail(new Slider(0, v -> {
             if (selected != null && SoundboardAudioSystem.isPlaying(selected.getName()))
                 SoundboardAudioSystem.setCursor(selected.getName(), v.floatValue());
         }).readout(v -> timelineLabel()));
-        timeline.bounds(cx, y, cw, 18);
-        y += 24;
+        timeline.bounds(bodyX, y, bodyW, ctl);
+        y += ctl + gap;
 
-        timeField = detail(new TextField().maxLength(10).onChange(t -> {
+        int timeW = vanilla() ? 64 : 58;
+        timeField = detail(new TextField().maxLength(10).placeholder("0:00.0").onChange(t -> {
             if (selected == null || !timeField.isFocused()) return;
             if (!SoundboardAudioSystem.isPlaying(selected.getName())) return;
             long ms = GuiTools.parseTimeMillis(t);
             long dur = SoundboardAudioSystem.getDurationMillis(selected.getName());
             if (ms >= 0 && dur > 0) SoundboardAudioSystem.setCursor(selected.getName(), Math.max(0f, Math.min(1f, ms / (float) dur)));
         }));
-        timeField.bounds(cx, y, 70, 18);
+        timeField.bounds(bodyX, y, timeW, ctl);
+        timeField.tooltip(tip("tooltip.opensoundboard.time_field"));
 
-        int tbw = 20;
-        int tbg = 4;
-        int groupW = tbw * 5 + tbg * 4;
-        int tb = cx + (cw - groupW) / 2;
-        detail(new Button(Component.literal("⏹"), b -> SoundboardAudioSystem.stopAll()).secondary())
-                .bounds(tb, y, tbw, 18).tooltip(tip("gui.opensoundboard.stop_all"));
-        detail(new Button(Component.literal("⏪"), b -> skip(-1)).secondary())
-                .bounds(tb + (tbw + tbg), y, tbw, 18).tooltip(tip("gui.opensoundboard.skip_back"));
-        pauseBtn = detail(new Button(Component.literal("⏸"), b -> togglePause()).secondary());
-        pauseBtn.bounds(tb + (tbw + tbg) * 2, y, tbw, 18).tooltip(tip("gui.opensoundboard.pause_resume"));
-        detail(new Button(Component.literal("⏩"), b -> skip(1)).secondary())
-                .bounds(tb + (tbw + tbg) * 3, y, tbw, 18).tooltip(tip("gui.opensoundboard.skip_forward"));
-        loopBtn = detail(new Button(Component.literal("🔁"), b -> toggleLoop()).secondary());
-        loopBtn.bounds(tb + (tbw + tbg) * 4, y, tbw, 18);
-        loopBtn.tooltip(tip("gui.opensoundboard.loop"));
-        detail(new Button(Component.literal("⚑ ").append(Component.translatable("gui.opensoundboard.set_start")), b -> setStart()).secondary())
-                .bounds(cx + cw - 84, y, 84, 18).tooltip(tip("tooltip.opensoundboard.set_start"));
+        int tbw = vanilla() ? 20 : 22;
+        int groupW = tbw * 3 + gap * 2;
+        int tb = bodyX + (bodyW - groupW) / 2;
+        detail(new Button(Icons.SKIP_BACK, null, b -> skip(-1)).secondary())
+                .bounds(tb, y, tbw, ctl).tooltip(tip("gui.opensoundboard.skip_back"));
+        pauseBtn = detail(new Button(Icons.PAUSE, null, b -> togglePause()).secondary());
+        pauseBtn.bounds(tb + tbw + gap, y, tbw, ctl).tooltip(tip("gui.opensoundboard.pause_resume"));
+        detail(new Button(Icons.SKIP_FORWARD, null, b -> skip(1)).secondary())
+                .bounds(tb + (tbw + gap) * 2, y, tbw, ctl).tooltip(tip("gui.opensoundboard.skip_forward"));
+
+        int rx = bodyX + bodyW;
+        rx -= tbw;
+        detail(new Button(Icons.STOP, null, b -> SoundboardAudioSystem.stopAll()).secondary().danger(true))
+                .bounds(rx, y, tbw, ctl).tooltip(tip("gui.opensoundboard.stop_all"));
+        rx -= tbw + gap;
+        detail(new Button(Icons.START_HERE, null, b -> setStart()).secondary())
+                .bounds(rx, y, tbw, ctl).tooltip(tip("tooltip.opensoundboard.set_start"));
+        rx -= tbw + gap;
+        loopBtn = detail(new Button(Icons.LOOP, null, b -> toggleLoop()).secondary());
+        loopBtn.bounds(rx, y, tbw, ctl).tooltip(tip("gui.opensoundboard.loop"));
     }
 
     // ---------------------------------------------------------------- scan / list
+
+    private List<Breadcrumbs.Crumb> breadcrumbs() {
+        List<Breadcrumbs.Crumb> crumbs = new ArrayList<>();
+        crumbs.add(new Breadcrumbs.Crumb(tip("gui.opensoundboard.library_root"), () -> openFolder(null)));
+        for (File folder : SoundLibrary.trail(currentFolder)) {
+            crumbs.add(new Breadcrumbs.Crumb(folder.getName(), () -> openFolder(folder)));
+        }
+        return crumbs;
+    }
+
+    /** Navigate to {@code folder}; null or the sounds folder itself means the root. */
+    private void openFolder(File folder) {
+        currentFolder = SoundLibrary.isInside(folder) ? folder : null;
+        SoundboardConfig.saveLastOpenedFolder(currentFolder == null ? null : SoundLibrary.relativePath(currentFolder));
+        if (search != null) search.setText("");
+        rebuildUi();
+    }
 
     private void scanSounds() {
         String query = search == null ? "" : search.getText().trim().toLowerCase();
         results.clear();
         list.clearRows();
 
-        File dir = currentFolder != null ? currentFolder : OpenSoundboardClient.soundDir;
-        if (currentFolder != null) {
-            list.addRow(navRow("← " + currentFolder.getName(), 0xFF9A9AA6, () -> {
-                currentFolder = null;
-                SoundboardConfig.saveLastOpenedFolder(null);
-                scanSounds();
-            }));
-        } else if (SoundboardConfig.data.isShowSubfolders()) {
-            File[] subs = OpenSoundboardClient.soundDir.listFiles(File::isDirectory);
-            if (subs != null) {
-                Arrays.sort(subs, Comparator.comparing(File::getName));
-                for (File sub : subs) {
-                    File[] mp3s = sub.listFiles((d, nm) -> nm.endsWith(".mp3"));
-                    if (mp3s == null || mp3s.length == 0) continue;
-                    final File folder = sub;
-                    list.addRow(navRow("📁 " + sub.getName(), 0xFFF0C044, () -> {
-                        currentFolder = folder;
-                        SoundboardConfig.saveLastOpenedFolder(folder);
-                        scanSounds();
-                    }));
-                }
+        boolean subfolders = SoundboardConfig.data.isShowSubfolders();
+        File dir = currentFolder != null ? currentFolder : SoundLibrary.root();
+        boolean hasFolders = false;
+        if (subfolders && query.isEmpty()) {
+            for (File folder : SoundLibrary.folders(dir)) {
+                list.addRow(folderRow(folder));
+                hasFolders = true;
             }
         }
 
-        File[] files = dir.listFiles((d, nm) -> nm.endsWith(".mp3"));
-        if (files == null) files = new File[0];
-        List<File> sorted = Arrays.stream(files)
+        List<File> candidates = subfolders && !query.isEmpty() ? SoundLibrary.allSounds(dir) : SoundLibrary.sounds(dir);
+        List<File> sorted = candidates.stream()
                 .filter(f -> f.getName().toLowerCase().contains(query))
                 .sorted(comparator())
                 .collect(Collectors.toList());
         results.addAll(sorted);
-        for (File f : sorted) list.addRow(soundRow(f));
+        if (hasFolders && !sorted.isEmpty()) list.addRow(dividerRow());
+        for (File f : sorted) {
+            File parent = f.getParentFile();
+            String hint = parent != null && !parent.getAbsoluteFile().equals(dir.getAbsoluteFile())
+                    ? SoundLibrary.folderOf(f) : null;
+            list.addRow(soundRow(f, hint));
+        }
 
+        list.emptyText(tip(query.isEmpty() ? "gui.opensoundboard.empty" : "gui.opensoundboard.no_results"));
         SoundboardAudioSystem.scanDurations();
     }
 
-    private ScrollList.Row navRow(String label, int color, Runnable onClick) {
+    private ScrollList.Row folderRow(File folder) {
+        final String name = folder.getName();
+        final int count = SoundLibrary.countSounds(folder);
         return new ScrollList.Row() {
             public int height() {
-                return ROW_H;
+                return SoundRows.rowHeight();
             }
 
             public void draw(UiCanvas c, int rx, int ry, int rw, boolean hovered) {
-                if (hovered) c.fillRoundRect(rx, ry, rw, ROW_H, Theme.ROW);
-                c.text(GuiTools.trimName(font, label, rw - 10), rx + 5,
-                        ry + (ROW_H - c.lineHeight()) / 2, color);
-            }
-
-            public boolean click(double mx, double my, int rx, int ry, int rw, int button) {
-                if (button == 0) {
-                    onClick.run();
-                    return true;
-                }
-                return false;
-            }
-        };
-    }
-
-    private ScrollList.Row soundRow(File file) {
-        final String name = file.getName();
-        return new ScrollList.Row() {
-            public int height() {
-                return ROW_H;
-            }
-
-            public void draw(UiCanvas c, int rx, int ry, int rw, boolean hovered) {
-                boolean sel = selected != null && selected.getName().equals(name);
-                boolean playing = SoundboardAudioSystem.isPlaying(name);
-                boolean fav = SoundboardConfig.get(name).isFavorite();
-                if (sel) c.fillRoundRect(rx, ry, rw, ROW_H, Theme.ROW_HOVER);
-                else if (hovered) c.fillRoundRect(rx, ry, rw, ROW_H, Theme.ROW);
-
-                c.fillRoundRect(rx + 3, ry + 2, PLAY_W, ROW_H - 4, playing ? 0xFFB23A3A : Theme.ACCENT);
-                int textY = c.centeredTextY(ry, ROW_H);
-                c.centeredText(Component.literal(playing ? "⏹" : "▶"),
-                        rx + 3 + PLAY_W / 2, textY, Theme.TEXT_ON_ACCENT);
-
-                c.text(fav ? "★" : "☆", rx + PLAY_W + 8, textY, fav ? 0xFFF0C044 : Theme.TEXT_MUTED);
-
-                int nameX = rx + PLAY_W + 8 + STAR_W + 4;
-                String label = GuiTools.trimName(font, GuiTools.baseName(file), rw - (nameX - rx) - 6);
-                c.text(label, nameX, textY, fav ? 0xFF8B85F0 : (playing ? 0xFFECD27A : Theme.TEXT));
+                SoundRows.drawFolder(c, name, count, rx, ry, rw, height(), hovered);
             }
 
             public boolean click(double mx, double my, int rx, int ry, int rw, int button) {
                 if (button != 0) return false;
-                if (mx < rx + 3 + PLAY_W) {
+                openFolder(folder);
+                return true;
+            }
+        };
+    }
+
+    private ScrollList.Row dividerRow() {
+        return new ScrollList.Row() {
+            public int height() {
+                return 5;
+            }
+
+            public void draw(UiCanvas c, int rx, int ry, int rw, boolean hovered) {
+                SoundRows.drawDivider(c, rx, ry, rw, height());
+            }
+        };
+    }
+
+    private ScrollList.Row soundRow(File file, String folderHint) {
+        final String name = file.getName();
+        return new ScrollList.Row() {
+            public int height() {
+                return SoundRows.rowHeight();
+            }
+
+            public void draw(UiCanvas c, int rx, int ry, int rw, boolean hovered) {
+                boolean sel = selected != null && selected.getName().equals(name);
+                SoundRows.drawSound(c, file, rx, ry, rw, height(), sel, hovered, true, folderHint);
+            }
+
+            public boolean click(double mx, double my, int rx, int ry, int rw, int button) {
+                if (button != 0) return false;
+                if (SoundRows.inPlayZone(mx, rx)) {
                     select(file);
                     togglePlay(file);
-                } else if (mx < rx + PLAY_W + 8 + STAR_W + 4) {
+                } else if (SoundRows.inStarZone(mx, rx)) {
                     var data = SoundboardConfig.get(name);
                     data.setFavorite(!data.isFavorite());
                     SoundboardConfig.save();
                     scanSounds();
                 } else {
+                    long now = System.currentTimeMillis();
+                    if (name.equals(lastClickedName) && now - lastClickTime < DOUBLE_CLICK_MS) {
+                        togglePlay(file);
+                        lastClickedName = null;
+                    } else {
+                        lastClickedName = name;
+                        lastClickTime = now;
+                    }
                     select(file);
                 }
                 return true;
             }
 
             public String tooltip(double mx, int rx, int rw) {
-                if (mx < rx + 3 + PLAY_W) {
-                    return Component.translatable(SoundboardAudioSystem.isPlaying(name) ? "gui.opensoundboard.stop" : "gui.opensoundboard.play").getString();
+                if (SoundRows.inPlayZone(mx, rx)) {
+                    return tip(SoundboardAudioSystem.isPlaying(name) ? "gui.opensoundboard.stop" : "gui.opensoundboard.play");
                 }
-                if (mx < rx + PLAY_W + 8 + STAR_W + 4) {
-                    return Component.translatable("gui.opensoundboard.favorite").getString();
-                }
-                return GuiTools.baseName(file);
+                if (SoundRows.inStarZone(mx, rx)) return tip("gui.opensoundboard.favorite");
+                return null;
             }
         };
     }
@@ -339,42 +366,82 @@ public class SoundboardScreen extends OsbScreen {
     }
 
     private void refreshDetails() {
-        // The details controls stay visible at all times (like the original); they just show a
-        // neutral state and no-op safely when nothing is selected.
-        if (selected == null) {
+        boolean hasSelection = selected != null;
+        for (Widget w : details) w.active = hasSelection;
+        loopBtn.active = true;
+        loopBtn.setSelected(SoundboardConfig.data.isLoopAll());
+
+        if (!hasSelection) {
+            pauseBtn.setIcon(Icons.PLAY);
             localSlider.set(0);
             playerSlider.set(0);
+            timeline.set(0);
             bindBtn.setLabel(GuiTools.keyBindLabel(null));
-            if (!timeline.isFocused()) timeline.set(0);
             return;
         }
-        var data = SoundboardConfig.get(selected.getName());
+        String key = selected.getName();
+        var data = SoundboardConfig.get(key);
         localSlider.set(data.getLocalVolume());
         playerSlider.set(data.getPlayerVolume());
         bindBtn.setLabel(binding
                 ? Component.translatable("gui.opensoundboard.keybind.listening")
                 : GuiTools.keyBindLabel(data.getKeybind()));
-        boolean playing = SoundboardAudioSystem.isPlaying(selected.getName());
-        pauseBtn.setLabel(Component.literal(SoundboardAudioSystem.isPaused(selected.getName()) ? "▶" : "⏸"));
+        bindBtn.setSelected(binding);
+
+        boolean playing = SoundboardAudioSystem.isPlaying(key);
+        pauseBtn.setIcon(playing && !SoundboardAudioSystem.isPaused(key) ? Icons.PAUSE : Icons.PLAY);
+        timeline.active = playing;
         if (playing) {
-            if (!timeline.isFocused()) timeline.set(SoundboardAudioSystem.getProgress(selected.getName()));
-            if (!timeField.isFocused())
-                timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(selected.getName())));
+            timeline.set(SoundboardAudioSystem.getProgress(key));
+            if (!timeField.isFocused()) timeField.setText(GuiTools.formatTimeMillis(SoundboardAudioSystem.getTimeMillis(key)));
+        } else {
+            timeline.set(0);
+            if (!timeField.isFocused()) timeField.setText("");
         }
     }
 
     @Override
     protected void renderContent(UiCanvas c) {
-        renderScreenBox(c, px, py, pw, ph);
-        c.centeredText(Component.translatable("gui.opensoundboard.title"), px + pw / 2, py + 12, Theme.TEXT);
+        renderFrame(c, getTitle().getString());
+        renderOutputStatus(c);
 
-        int hy = detailsTop - 11;
+        boolean vanilla = vanilla();
+        int ctl = UiStyle.controlHeight();
+        int lineH = Math.max(c.lineHeight(), ctl);
+        int textY = c.centeredTextY(detailsTop, lineH);
+        int maxW = bindBtn.x - bodyX - 8;
+        if (!vanilla) c.hLine(bodyX, detailsTop - 5, bodyW, Theme.border);
+
         if (selected == null) {
-            c.centeredText(Component.translatable("gui.opensoundboard.select_hint"), px + pw / 2, hy, Theme.TEXT_MUTED);
+            c.text(c.trimText(tip("gui.opensoundboard.select_hint"), maxW), bodyX, textY,
+                    vanilla ? UiStyle.VANILLA_TEXT_MUTED : Theme.textMuted);
         } else {
-            String heading = Component.translatable("gui.opensoundboard.settings_for", selected.getName()).getString();
-            c.centeredText(Component.literal(c.trimText(heading, cw - 8)), px + pw / 2, hy, 0xFFECD27A);
+            String name = GuiTools.baseName(selected);
+            int nameX = bodyX;
+            if (SoundboardAudioSystem.isPlaying(selected.getName())) {
+                c.icon(Icons.NOTE, bodyX, detailsTop + (lineH - Icons.NOTE.height) / 2, vanilla ? 0xFFFFFF55 : Theme.accent);
+                nameX += Icons.NOTE.width + 5;
+            }
+            c.text(c.trimText(name, maxW - (nameX - bodyX)), nameX, textY, vanilla ? UiStyle.VANILLA_TEXT : Theme.text);
         }
+    }
+
+    /** Shows where sounds currently go: a voice chat, local-only playback, or nowhere. */
+    private void renderOutputStatus(UiCanvas c) {
+        VoiceBackend backend = SoundboardAudioSystem.activeBackend();
+        String status = backend != null ? backend.name() : tip("gui.opensoundboard.output.none");
+        if (vanilla()) {
+            int color = backend == null ? 0xFFFF5555 : UiStyle.VANILLA_TEXT_MUTED;
+            c.rightText(c.trimText(status, this.width / 3), this.width - 8, (UiStyle.VANILLA_HEADER_H - c.lineHeight()) / 2 + 1, color);
+            return;
+        }
+        int titleEnd = frameX + Theme.PAD + c.textWidth(getTitle().getString());
+        int maxW = frameX + frameW - 5 * 18 - 8 - (titleEnd + 12);
+        if (maxW < 30) return;
+        int textY = c.centeredTextY(frameY, Theme.HEADER_H + 1);
+        int dotColor = backend == null ? Theme.DANGER : (backend.localOnly() ? Theme.textFaint : Theme.accent);
+        c.fillRect(titleEnd + 8, textY + c.lineHeight() / 2 - 2, 3, 3, dotColor);
+        c.text(c.trimText(status, maxW), titleEnd + 15, textY, Theme.textFaint);
     }
 
     private void onVolume(double v, boolean local) {
@@ -390,7 +457,6 @@ public class SoundboardScreen extends OsbScreen {
             data.setPlayerVolume(f);
         }
         SoundboardAudioSystem.setVolume(selected.getName(), data.getLocalVolume(), data.getPlayerVolume());
-        SoundboardConfig.save();
     }
 
     private void togglePlay(File file) {
@@ -402,8 +468,13 @@ public class SoundboardScreen extends OsbScreen {
     private void togglePause() {
         if (selected == null) return;
         String key = selected.getName();
-        if (SoundboardAudioSystem.isPaused(key)) SoundboardAudioSystem.resume(key);
-        else SoundboardAudioSystem.pause(key);
+        if (!SoundboardAudioSystem.isPlaying(key)) {
+            togglePlay(selected);
+        } else if (SoundboardAudioSystem.isPaused(key)) {
+            SoundboardAudioSystem.resume(key);
+        } else {
+            SoundboardAudioSystem.pause(key);
+        }
     }
 
     private void skip(int dir) {
@@ -426,7 +497,7 @@ public class SoundboardScreen extends OsbScreen {
     private void startBinding() {
         if (selected != null) {
             binding = true;
-            bindBtn.setLabel(Component.translatable("gui.opensoundboard.keybind.listening"));
+            refreshDetails();
         }
     }
 
@@ -434,10 +505,10 @@ public class SoundboardScreen extends OsbScreen {
         if (selected == null) return Component.literal("0:00.0 / 0:00.0");
         String key = selected.getName();
         long dur = SoundboardAudioSystem.getDurationMillis(key);
-        long passed = SoundboardAudioSystem.getTimeMillis(key);
+        long passed = SoundboardAudioSystem.isPlaying(key) ? SoundboardAudioSystem.getTimeMillis(key) : 0;
         if (dur > 0) {
             passed = Math.max(0, Math.min(dur, passed));
-            return Component.literal(GuiTools.formatTimeMillis(passed) + " / -" + GuiTools.formatTimeMillis(Math.max(0, dur - passed)));
+            return Component.literal(GuiTools.formatTimeMillis(passed) + " / " + GuiTools.formatTimeMillis(dur));
         }
         return Component.literal("0:00.0 / 0:00.0");
     }
@@ -448,8 +519,8 @@ public class SoundboardScreen extends OsbScreen {
         return Component.translatable("gui.opensoundboard.sort." + SoundboardConfig.data.getSortMode());
     }
 
-    private Component sortDirLabel() {
-        return Component.literal(SoundboardConfig.data.isSortAscending() ? "▲" : "▼");
+    private Icons sortDirIcon() {
+        return SoundboardConfig.data.isSortAscending() ? Icons.ARROW_UP : Icons.ARROW_DOWN;
     }
 
     private void cycleSortMode() {
@@ -459,19 +530,15 @@ public class SoundboardScreen extends OsbScreen {
         for (int i = 0; i < modes.length; i++) if (modes[i].equals(cur)) next = (i + 1) % modes.length;
         SoundboardConfig.data.setSortMode(modes[next]);
         SoundboardConfig.save();
-        sortBtn.setRight(sortModeLabel());
+        sortModeBtn.setLabel(sortModeLabel());
         scanSounds();
     }
 
     private void toggleSortDir() {
         SoundboardConfig.data.setSortAscending(!SoundboardConfig.data.isSortAscending());
         SoundboardConfig.save();
-        sortBtn.setLeft(sortDirLabel());
+        sortDirBtn.setIcon(sortDirIcon());
         scanSounds();
-    }
-
-    private static Component icon(String glyph, String key) {
-        return Component.literal(glyph + " ").append(Component.translatable(key));
     }
 
     private static String tip(String key) {
@@ -505,7 +572,7 @@ public class SoundboardScreen extends OsbScreen {
     protected boolean screenKeyPressed(int key, int scan, int mods) {
         if (binding && selected != null) {
             var data = SoundboardConfig.get(selected.getName());
-            if (key == GLFW.GLFW_KEY_ESCAPE) {
+            if (key == Keys.ESCAPE) {
                 data.setKeybind(null);
             } else {
                 data.setKeybind(new SoundboardConfig.KeyBind(key, scan, mods));
@@ -515,23 +582,38 @@ public class SoundboardScreen extends OsbScreen {
             refreshDetails();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_ENTER && search != null && search.isFocused() && !results.isEmpty()) {
-            select(results.get(0));
-            togglePlay(results.get(0));
-            return true;
+        if (key == Keys.ENTER || key == Keys.NUMPAD_ENTER) {
+            if (timeField != null && timeField.isFocused()) return false;
+            // Typing a search and pressing Enter plays the first match; otherwise Enter plays the selection.
+            if (search != null && search.isFocused() && !search.getText().isBlank() && !results.isEmpty()) {
+                select(results.get(0));
+                togglePlay(results.get(0));
+                return true;
+            }
+            if (selected != null) {
+                togglePlay(selected);
+                return true;
+            }
+            if (!results.isEmpty()) {
+                select(results.get(0));
+                togglePlay(results.get(0));
+                return true;
+            }
         }
         return false;
+    }
+
+    /** Typing while nothing is focused starts a search. */
+    @Override
+    protected boolean screenCharTyped(char ch) {
+        if (search == null || binding || ch < 32 || ch == 127 || Character.isWhitespace(ch)) return false;
+        setFocused(search);
+        return search.charTyped(ch);
     }
 
     @Override
     public void tick() {
         super.tick();
-        if (loopBtn != null) loopBtn.setPrimary(SoundboardConfig.data.isLoopAll());
         refreshDetails();
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
     }
 }

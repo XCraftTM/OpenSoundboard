@@ -18,6 +18,9 @@ public class SoundboardConfig {
     public static final float DEFAULT_UI_WIDTH_SCALE = 0.8f;
     public static final float DEFAULT_UI_HEIGHT_SCALE = 0.9f;
     public static final float DEFAULT_FONT_SCALE = 1.0f;
+    public static final String DEFAULT_ACCENT_COLOR = "#5FAE6E";
+    public static final String DEFAULT_SURFACE_TONE = "graphite";
+    public static final float DEFAULT_PANEL_OPACITY = 0.96f;
 
     private static final File BASE_DIR = new File(PlatformBootstrap.client().configDirectory(), "opensoundboard");
 
@@ -40,6 +43,7 @@ public class SoundboardConfig {
 
     boolean playWhileMuted = true;
     boolean playLocally = true;
+    boolean localPlayback = true; // play on this computer when no voice chat is connected
     float globalLocalVolume = 0.2f;
     float globalPlayerVolume = 0.2f;
     boolean syncGlobalVolume = false;
@@ -55,10 +59,15 @@ public class SoundboardConfig {
     float uiWidthScale = DEFAULT_UI_WIDTH_SCALE;
     float uiHeightScale = DEFAULT_UI_HEIGHT_SCALE;
     float fontScale = DEFAULT_FONT_SCALE;
+    String accentColor = DEFAULT_ACCENT_COLOR;
+    String surfaceTone = DEFAULT_SURFACE_TONE;
+    float panelOpacity = DEFAULT_PANEL_OPACITY;
+    boolean roundedCorners = true;
     boolean showSubfolders = true;
     String sortMode = "name";
     boolean sortAscending = true;
-    String lastOpenedFolder = null; // relative folder name, null = root
+    String lastOpenedFolder = null; // folder path relative to the sounds folder, null = root
+    boolean downloadToLastFolder = false; // downloader saves into lastOpenedFolder instead of the root
 
     private static void ensureConfigDir() {
         if (!BASE_DIR.exists()) {
@@ -126,6 +135,33 @@ public class SoundboardConfig {
         uiWidthScale = normalizeScale(uiWidthScale, DEFAULT_UI_WIDTH_SCALE, 0.6f, 1.0f);
         uiHeightScale = normalizeScale(uiHeightScale, DEFAULT_UI_HEIGHT_SCALE, 0.7f, 1.0f);
         fontScale = normalizeScale(fontScale, DEFAULT_FONT_SCALE, 0.75f, 1.25f);
+        panelOpacity = normalizeScale(panelOpacity, DEFAULT_PANEL_OPACITY, 0.6f, 1.0f);
+        if (parseHexColor(accentColor) < 0) accentColor = DEFAULT_ACCENT_COLOR;
+        if (surfaceTone == null || surfaceTone.isBlank()) surfaceTone = DEFAULT_SURFACE_TONE;
+    }
+
+    /** Parses "#RRGGBB" or "RRGGBB" into 0xRRGGBB, or returns -1 if the value is not a valid color. */
+    public static int parseHexColor(String value) {
+        if (value == null) return -1;
+        String hex = value.trim();
+        if (hex.startsWith("#")) hex = hex.substring(1);
+        if (!hex.matches("[0-9a-fA-F]{6}")) return -1;
+        return Integer.parseInt(hex, 16);
+    }
+
+    public static String formatHexColor(int rgb) {
+        return String.format("#%06X", rgb & 0xFFFFFF);
+    }
+
+    /** Restores every appearance option (style, colors, and sizes) to its default. */
+    public void resetAppearance() {
+        accentColor = DEFAULT_ACCENT_COLOR;
+        surfaceTone = DEFAULT_SURFACE_TONE;
+        panelOpacity = DEFAULT_PANEL_OPACITY;
+        roundedCorners = true;
+        uiWidthScale = DEFAULT_UI_WIDTH_SCALE;
+        uiHeightScale = DEFAULT_UI_HEIGHT_SCALE;
+        fontScale = DEFAULT_FONT_SCALE;
     }
 
     private static float normalizeScale(float value, float fallback, float minimum, float maximum) {
@@ -158,14 +194,20 @@ public class SoundboardConfig {
     }
 
     /**
-     * Resolves the stored lastOpenedFolder name to a File.
-     * Returns null if unset or the folder no longer exists (and clears the stored value).
+     * Resolves the stored lastOpenedFolder (a path relative to the sounds folder, any depth) to a File.
+     * Returns null if unset, outside the sounds folder, or no longer existing (and clears the stored value).
      */
     public static java.io.File resolveLastOpenedFolder(java.io.File soundDir) {
-        String name = data.lastOpenedFolder;
-        if (name == null || name.isBlank()) return null;
-        java.io.File folder = new java.io.File(soundDir, name);
-        if (!folder.exists() || !folder.isDirectory()) {
+        String path = data.lastOpenedFolder;
+        if (path == null || path.isBlank()) return null;
+        java.io.File folder = new java.io.File(soundDir, path);
+        boolean inside;
+        try {
+            inside = folder.getCanonicalPath().startsWith(soundDir.getCanonicalPath() + java.io.File.separator);
+        } catch (IOException e) {
+            inside = false;
+        }
+        if (!inside || !folder.isDirectory()) {
             data.lastOpenedFolder = null;
             save();
             return null;
@@ -173,8 +215,9 @@ public class SoundboardConfig {
         return folder;
     }
 
-    public static void saveLastOpenedFolder(java.io.File folder) {
-        data.lastOpenedFolder = (folder != null) ? folder.getName() : null;
+    /** Remembers the open folder as a '/'-separated path relative to the sounds folder (null = root). */
+    public static void saveLastOpenedFolder(String relativePath) {
+        data.lastOpenedFolder = (relativePath == null || relativePath.isBlank()) ? null : relativePath;
         save();
     }
 

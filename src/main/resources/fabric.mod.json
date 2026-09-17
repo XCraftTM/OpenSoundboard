@@ -4,11 +4,23 @@
   "version": "${version}",
 
   "name": "OpenSoundboard",
-  "description": "A feature-rich soundboard mod for Simple Voice Chat, providing high-quality audio playback and easy management.",
+  "description": "A soundboard for Simple Voice Chat and Plasmo Voice (both optional). Play MP3s to other players through voice chat or just for yourself, organize them in folders, bind them to keys or a sound wheel, and download new sounds right in the game.",
   "authors": [
-    "XCraftTM"
+    {
+      "name": "XCraftTM",
+      "contact": {
+        "homepage": "https://github.com/XCraftTM"
+      }
+    }
   ],
-  "contact": {},
+  "contributors": [
+    "KamiKMB (logo)"
+  ],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/opensoundboard",
+    "sources": "https://github.com/XCraftTM/OpenSoundboard",
+    "issues": "https://github.com/XCraftTM/OpenSoundboard/issues"
+  },
 
   "license": "MIT",
   "icon": "assets/opensoundboard/icon.png",
@@ -30,10 +42,22 @@
     "fabricloader": ">=${fabricLoaderVersion}",
     "fabric-api": ">=${fabricApiVersion}",
     "minecraft": "${minecraftDependency}",
-    "java": ">=${javaVersion}",
-    "voicechat": ">=${voicechatVersion}"
+    "java": ">=${javaVersion}"
   },
   "suggests": {
+    "voicechat": ">=${voicechatVersion}",
+    "plasmovoice": ">=${plasmovoiceVersion}",
     "modmenu": ">=${modmenuVersion}"
+  },
+
+  "custom": {
+    "modmenu": {
+      "links": {
+        "modmenu.modrinth": "https://modrinth.com/mod/opensoundboard",
+        "modmenu.github_releases": "https://github.com/XCraftTM/OpenSoundboard/releases",
+        "modmenu.wiki": "https://github.com/XCraftTM/OpenSoundboard#readme"
+      },
+      "update_checker": true
+    }
   }
 }

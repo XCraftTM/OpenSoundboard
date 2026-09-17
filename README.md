@@ -5,8 +5,8 @@
 <h1 align="center">OpenSoundboard</h1>
 
 <p align="center">
-  A feature-rich soundboard mod for <a href="https://modrinth.com/plugin/simple-voice-chat">Simple Voice Chat</a>.<br>
-  Play MP3s directly through voice chat — with per-sound controls, keybinds, and a built-in YouTube downloader.
+  A feature-rich soundboard mod for <a href="https://modrinth.com/plugin/simple-voice-chat">Simple Voice Chat</a> and <a href="https://modrinth.com/plugin/plasmo-voice">Plasmo Voice</a>.<br>
+  Play MP3s directly through voice chat — with per-sound controls, keybinds, and a built-in downloader.
 </p>
 
 <p align="center">
@@ -22,6 +22,7 @@
 **Soundboard UI** — Press **U** (configurable) to open a full-featured soundboard screen.
 
 - Browse, search, and favorite your sounds
+- Organize sounds in folders of any depth, with clickable breadcrumbs
 - Play / pause / stop with playback controls
 - Timeline seeking and skip forward/back
 - Set custom starting points for any sound
@@ -35,10 +36,10 @@
 - Global volume multiplier for both channels
 - **Custom keybinds** — bind any key combo to instantly play a sound
 
-**Built-in YouTube Downloader**
+**Built-in Downloader**
 
-- Paste a YouTube URL and download audio directly into your sounds folder
-- Progress bar and live log output
+- Paste a link, or search YouTube and pick a result (thumbnail, title, channel, length, views)
+- Downloads keep running in the background; the yt-dlp log is available on demand
 - Extracts audio automatically as MP3
 - Automatically downloads yt-dlp and ffmpeg on first use
 
@@ -54,7 +55,8 @@
 
 | Minecraft              | Status                |
 |------------------------|-----------------------|
-| 26.2                   | ✅ Supported (latest)  |
+| 26.3                   | ✅ Supported (latest)  |
+| 26.2                   | ✅ Supported           |
 | 26.1, 26.1.1, 26.1.2  | ✅ Supported           |
 | 1.21.11                | ✅ Supported           |
 | 1.21, 1.21.1           | ✅ Supported           |
@@ -67,14 +69,14 @@
 | Mod | Required |
 |-----|----------|
 | [Fabric API](https://modrinth.com/mod/fabric-api) | Yes |
-| [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat) | Yes |
+| [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat) or [Plasmo Voice](https://modrinth.com/plugin/plasmo-voice) | Optional — needed to play sounds to other players; without one, sounds play locally |
 | [Mod Menu](https://modrinth.com/mod/modmenu) | Optional |
 
 ## Getting Started
 
 1. Install the mod and all required dependencies
-2. Join a server (or singleplayer world) with Simple Voice Chat
-3. Drop `.mp3` files into `.minecraft/opensoundboard/` — or use the built-in YouTube downloader
+2. Join a server (or singleplayer world) with Simple Voice Chat or Plasmo Voice — or skip voice chat to just play sounds for yourself
+3. Drop `.mp3` files into `.minecraft/opensoundboard/` (subfolders are fine) — or use the built-in downloader
 4. Press **U** to open the soundboard and start playing
 
 ## Building from Source
@@ -91,14 +93,14 @@ JAVA_HOME=<jdk-25> ./gradlew build
 JAVA_HOME=<jdk-25> ./gradlew buildAllJars
 ```
 
-The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.4.0+mc26.2.jar`. (Each is also left in `versions/<version>/build/libs/`.)
+The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.5.0+mc26.3.jar`. (Each is also left in `versions/<version>/build/libs/`.)
 
 To work on a single version, switch the active version first, then build or run just that node:
 
 ```bash
-./gradlew stonecutterSwitchTo26.2   # pick the active version
-./gradlew :26.2:build               # build just that node -> versions/26.2/build/libs/
-./gradlew client_26_2               # switch + launch its client
+./gradlew stonecutterSwitchTo26.3   # pick the active version
+./gradlew :26.3:build               # build just that node -> versions/26.3/build/libs/
+./gradlew client_26_3               # switch + launch its client
 ```
 
 > Minecraft 26.x builds require the Gradle daemon to run on Java 25 (set `JAVA_HOME` accordingly); 1.21.x versions target Java 21 but build fine on a Java 25 daemon too. The root `build` task delegates to the isolated Stonecutter builds; use a fully qualified task such as `:1.21.11:build` when working on only the active version.

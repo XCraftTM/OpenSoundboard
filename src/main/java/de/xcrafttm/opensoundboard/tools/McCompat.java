@@ -24,26 +24,31 @@ public final class McCompat {
     /** Current screen. Minecraft 26.2 moved screen ownership from Minecraft to Gui. */
     public static Screen screen(Minecraft client) {
         //? if >=26.2 {
-        /*return client.gui.screen();
-        *///?} else {
-        return client.screen;
-        //?}
+        return client.gui.screen();
+        //?} else {
+        /*return client.screen;
+        *///?}
     }
 
     /** Change the current screen. Minecraft 26.2 moved screen ownership from Minecraft to Gui. */
     public static void setScreen(Minecraft client, Screen screen) {
         //? if >=26.2 {
-        /*client.gui.setScreen(screen);
-        *///?} else {
-        client.setScreen(screen);
-        //?}
+        client.gui.setScreen(screen);
+        //?} else {
+        /*client.setScreen(screen);
+        *///?}
     }
 
-    /** Open a folder in the OS file explorer. Util moved from net.minecraft.Util to net.minecraft.util.Util. */
+    /**
+     * Open a folder in the OS file explorer. Util moved from net.minecraft.Util to
+     * net.minecraft.util.Util in 1.21.2; 26.3 moved opening to Blaze3D.
+     */
     public static void openFolder(java.io.File folder) {
-        //? if >=1.21.2 {
-        net.minecraft.util.Util.getPlatform().openFile(folder);
-        //?} else {
+        //? if >=26.3 {
+        com.mojang.blaze3d.Blaze3D.openPath(folder.toPath());
+        //?} else if >=1.21.2 {
+        /*net.minecraft.util.Util.getPlatform().openFile(folder);
+        *///?} else {
         /*net.minecraft.Util.getPlatform().openFile(folder);
         *///?}
     }

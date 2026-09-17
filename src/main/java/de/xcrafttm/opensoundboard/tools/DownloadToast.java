@@ -48,12 +48,12 @@ final class DownloadToast {
     private static void updateActive(Component detail) {
         onClient(client -> {
             //? if >=26.2 {
-            /*SystemToast.addOrUpdate(client.gui.toastManager(), ACTIVE,
+            SystemToast.addOrUpdate(client.gui.toastManager(), ACTIVE,
                     Component.translatable("toast.opensoundboard.youtube.downloading"), detail);
-            *///?} else if >=1.21.11 {
-            SystemToast.addOrUpdate(client.getToastManager(), ACTIVE,
+            //?} else if >=1.21.11 {
+            /*SystemToast.addOrUpdate(client.getToastManager(), ACTIVE,
                     Component.translatable("toast.opensoundboard.youtube.downloading"), detail);
-            //?} else {
+            *///?} else {
             /*SystemToast.addOrUpdate(client.getToasts(), ACTIVE,
                     Component.translatable("toast.opensoundboard.youtube.downloading"), detail);
             *///?}
@@ -63,12 +63,12 @@ final class DownloadToast {
     private static void finish(Component title, Component detail) {
         onClient(client -> {
             //? if >=26.2 {
-            /*SystemToast.forceHide(client.gui.toastManager(), ACTIVE);
+            SystemToast.forceHide(client.gui.toastManager(), ACTIVE);
             SystemToast.addOrUpdate(client.gui.toastManager(), RESULT, title, detail);
-            *///?} else if >=1.21.11 {
-            SystemToast.forceHide(client.getToastManager(), ACTIVE);
+            //?} else if >=1.21.11 {
+            /*SystemToast.forceHide(client.getToastManager(), ACTIVE);
             SystemToast.addOrUpdate(client.getToastManager(), RESULT, title, detail);
-            //?} else {
+            *///?} else {
             /*SystemToast.forceHide(client.getToasts(), ACTIVE);
             SystemToast.addOrUpdate(client.getToasts(), RESULT, title, detail);
             *///?}

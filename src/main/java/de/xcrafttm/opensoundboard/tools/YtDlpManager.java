@@ -300,6 +300,87 @@ public final class YtDlpManager {
     public record DownloadResult(boolean success, String messageOrLog) {
     }
 
+    /** One YouTube search hit. {@code durationSeconds} and {@code viewCount} are -1 when unknown. */
+    public record SearchResult(String id, String title, String channel, int durationSeconds, long viewCount) {
+        public String url() {
+            return "https://www.youtube.com/watch?v=" + id;
+        }
+
+        public String thumbnailUrl() {
+            return "https://i.ytimg.com/vi/" + id + "/mqdefault.jpg";
+        }
+    }
+
+    public record SearchResponse(java.util.List<SearchResult> results, String error) {
+    }
+
+    /**
+     * Search YouTube through yt-dlp ("ytsearchN:") without downloading anything. Uses the flat
+     * playlist mode, so it only fetches the result page metadata and is fast.
+     */
+    public static SearchResponse search(String query, int limit, Consumer<Process> onProcessStart) {
+        if (query == null || query.isBlank()) return new SearchResponse(java.util.List.of(), "message.opensoundboard.empty_query");
+        if (!ensureBinariesPresent(null)) {
+            return new SearchResponse(java.util.List.of(), "message.opensoundboard.binaries_missing");
+        }
+
+        java.util.List<String> args = new java.util.ArrayList<>();
+        args.add(ytDlpFile().getAbsolutePath());
+        args.addAll(java.util.List.of("--flat-playlist", "-J", "--no-warnings", "--ignore-config", "--encoding", "utf-8"));
+        args.addAll(java.util.List.of("--js-runtimes", "deno:" + denoFile().getAbsolutePath()));
+        args.add("ytsearch" + Math.max(1, limit) + ":" + query.trim());
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder(args);
+            pb.directory(libDir());
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+            Process proc = pb.start();
+            if (onProcessStart != null) onProcessStart.accept(proc);
+
+            String json;
+            try (InputStream in = proc.getInputStream()) {
+                json = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+            if (!proc.waitFor(60, TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+                return new SearchResponse(java.util.List.of(), "message.opensoundboard.youtube.timeout");
+            }
+            if (proc.exitValue() != 0 || json.isBlank()) {
+                return new SearchResponse(java.util.List.of(), "message.opensoundboard.search_failed");
+            }
+            return new SearchResponse(parseSearch(json), null);
+        } catch (Throwable t) {
+            t.printStackTrace();
+            return new SearchResponse(java.util.List.of(), "message.opensoundboard.search_failed");
+        }
+    }
+
+    private static java.util.List<SearchResult> parseSearch(String json) {
+        java.util.List<SearchResult> out = new java.util.ArrayList<>();
+        com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(json).getAsJsonObject();
+        if (!root.has("entries") || !root.get("entries").isJsonArray()) return out;
+        for (com.google.gson.JsonElement element : root.getAsJsonArray("entries")) {
+            if (!element.isJsonObject()) continue;
+            com.google.gson.JsonObject entry = element.getAsJsonObject();
+            String id = string(entry, "id");
+            if (id == null || !id.matches("[A-Za-z0-9_-]{6,20}")) continue;
+            String title = string(entry, "title");
+            String channel = string(entry, "channel");
+            if (channel == null) channel = string(entry, "uploader");
+            int duration = entry.has("duration") && entry.get("duration").isJsonPrimitive()
+                    ? (int) Math.round(entry.get("duration").getAsDouble()) : -1;
+            long views = entry.has("view_count") && entry.get("view_count").isJsonPrimitive()
+                    ? entry.get("view_count").getAsLong() : -1;
+            out.add(new SearchResult(id, title != null ? title : id, channel != null ? channel : "", duration, views));
+        }
+        return out;
+    }
+
+    private static String string(com.google.gson.JsonObject object, String key) {
+        com.google.gson.JsonElement value = object.get(key);
+        return value != null && value.isJsonPrimitive() ? value.getAsString() : null;
+    }
+
     /**
      * Convert a title into a safe filename using the allowed character set.
      * Rules:
@@ -318,7 +399,10 @@ public final class YtDlpManager {
         return s;
     }
 
-    public static DownloadResult downloadUrlIntoSoundDir(String url, boolean audioOnly, Consumer<String> onProgress, Consumer<Process> onProcessStart) {
+    /**
+     * Download {@code url} with yt-dlp into {@code targetDir} (the main sounds folder when null).
+     */
+    public static DownloadResult downloadUrlIntoSoundDir(String url, File targetDir, boolean audioOnly, Consumer<String> onProgress, Consumer<Process> onProcessStart) {
         if (url == null || url.isBlank()) return new DownloadResult(false, "message.opensoundboard.empty_url");
 
         if (!ensureBinariesPresent(onProgress)) {
@@ -327,7 +411,11 @@ public final class YtDlpManager {
 
         File ytDlp = ytDlpFile();
         File ffmpeg = ffmpegFile();
-        File soundDir = soundDir();
+        File soundDir = targetDir != null ? targetDir : soundDir();
+        if (!soundDir.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            soundDir.mkdirs();
+        }
 
         // Save only sanitized names. We do it via yt-dlp template to avoid renaming after download.
         // We still keep the original title for display/metadata in yt-dlp logs.

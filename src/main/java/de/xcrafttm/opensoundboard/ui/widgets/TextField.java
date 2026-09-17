@@ -1,13 +1,13 @@
 package de.xcrafttm.opensoundboard.ui.widgets;
 
+import de.xcrafttm.opensoundboard.tools.Keys;
+import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
 import de.xcrafttm.opensoundboard.ui.UiStyle;
 import de.xcrafttm.opensoundboard.ui.Widget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
 
@@ -26,13 +26,23 @@ public class TextField extends Widget {
     private Consumer<String> onChange;
     private int blink = 0;
     private int scrollPx = 0;
-    private net.minecraft.client.gui.components.EditBox vanilla;
-    private int vanillaW = -1;
-    private int vanillaH = -1;
+    private Icons icon;
+    private boolean invalid = false;
 
     public TextField placeholder(String placeholder) {
         this.placeholder = placeholder;
         return this;
+    }
+
+    /** Small pixel icon drawn at the left edge (e.g. a magnifier for search fields). */
+    public TextField icon(Icons icon) {
+        this.icon = icon;
+        return this;
+    }
+
+    /** Marks the current content as invalid (red outline in the modern style). */
+    public void setInvalid(boolean invalid) {
+        this.invalid = invalid;
     }
 
     public TextField maxLength(int maxLength) {
@@ -90,22 +100,32 @@ public class TextField extends Widget {
 
     @Override
     public void draw(UiCanvas c) {
-        if (UiStyle.useVanillaComponents()) {
-            drawVanilla(c);
-            return;
+        boolean vanilla = UiStyle.useVanillaComponents();
+        if (vanilla) {
+            c.sprite(focused ? "widget/text_field_highlighted" : "widget/text_field", x, y, w, h);
+        } else {
+            boolean hover = active && c.hovered(x, y, w, h);
+            c.fillRoundRect(x, y, w, h, Theme.field);
+            int outline = invalid ? Theme.DANGER : (focused ? Theme.accent : (hover ? Theme.borderStrong : Theme.border));
+            c.roundBorder(x, y, w, h, outline);
         }
-
-        c.fillRoundRect(x, y, w, h, Theme.FIELD_BG);
-        c.roundBorder(x, y, w, h, focused ? Theme.ACCENT : Theme.BORDER);
-        drawContents(c);
+        if (icon != null) {
+            c.icon(icon, x + 5, y + (h - icon.height) / 2,
+                    vanilla ? UiStyle.VANILLA_HINT : (focused ? Theme.textMuted : Theme.textFaint));
+        }
+        drawContents(c, vanilla);
     }
 
-    private void drawContents(UiCanvas c) {
+    private int textLeft() {
+        return x + (icon != null ? icon.width + 9 : 5);
+    }
+
+    private void drawContents(UiCanvas c, boolean vanilla) {
         String s = text.toString();
-        int tx = x + 5;
+        int tx = textLeft();
         int textHeight = c.lineHeight();
-        int ty = y + (h - textHeight) / 2;
-        int innerW = w - 10;
+        int ty = y + (h - textHeight) / 2 + 1;
+        int innerW = x + w - 5 - tx;
 
         int cursorX = scaledWidth(s.substring(0, cursor));
         if (cursorX - scrollPx > innerW) scrollPx = cursorX - innerW;
@@ -113,45 +133,29 @@ public class TextField extends Widget {
         int fullW = scaledWidth(s);
         if (fullW - scrollPx < innerW) scrollPx = Math.max(0, fullW - innerW);
 
+        int textColor = vanilla ? (active ? 0xFFE0E0E0 : 0xFF707070) : (active ? Theme.text : Theme.textFaint);
+        int hintColor = vanilla ? UiStyle.VANILLA_HINT : Theme.textFaint;
+
         c.pushScissor(x + 1, y + 1, w - 2, h - 2);
         if (s.isEmpty() && !focused) {
-            c.text(placeholder, tx, ty, Theme.TEXT_MUTED);
+            c.text(c.trimText(placeholder, innerW), tx, ty, hintColor);
         } else {
             if (hasSelection()) {
                 int a = scaledWidth(s.substring(0, selStart())) - scrollPx;
                 int b = scaledWidth(s.substring(0, selEnd())) - scrollPx;
-                c.fillRect(tx + a, ty - 1, b - a, textHeight + 2, Theme.SELECTION);
+                c.fillRect(tx + a, ty - 1, b - a, textHeight, vanilla ? 0xFF0000FF : Theme.selection);
             }
-            c.text(s, tx - scrollPx, ty, Theme.TEXT);
+            c.text(s, tx - scrollPx, ty, textColor);
             if (focused && (blink / 6) % 2 == 0) {
-                c.fillRect(tx + cursorX - scrollPx, ty - 1, 1, textHeight + 2, Theme.TEXT);
+                c.fillRect(tx + cursorX - scrollPx, ty - 1, 1, textHeight, vanilla ? 0xFFD0D0D0 : Theme.accent);
             }
         }
         c.popScissor();
     }
 
-    private void drawVanilla(UiCanvas c) {
-        if (vanilla == null || vanillaW != w || vanillaH != h) {
-            vanilla = new net.minecraft.client.gui.components.EditBox(c.font, x, y, w, h, Component.empty());
-            vanillaW = w;
-            vanillaH = h;
-        }
-        vanilla.setX(x);
-        vanilla.setY(y);
-        vanilla.setMaxLength(maxLength);
-        if (!vanilla.getValue().isEmpty()) vanilla.setValue("");
-        vanilla.setCursorPosition(0);
-        vanilla.setHighlightPos(0);
-        vanilla.setHint(Component.empty());
-        vanilla.setFocused(false);
-        vanilla.active = active;
-        c.renderVanilla(vanilla);
-        drawContents(c);
-    }
-
     private int indexAtX(double mx) {
         String s = text.toString();
-        int rel = (int) mx - (x + 5) + scrollPx;
+        int rel = (int) mx - textLeft() + scrollPx;
         if (rel <= 0) return 0;
         for (int i = 1; i <= s.length(); i++) {
             int wPrev = scaledWidth(s.substring(0, i - 1));
@@ -194,21 +198,21 @@ public class TextField extends Widget {
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
         if (!focused) return false;
-        boolean ctrl = (mods & GLFW.GLFW_MOD_CONTROL) != 0;
-        boolean shift = (mods & GLFW.GLFW_MOD_SHIFT) != 0;
+        boolean ctrl = (mods & Keys.MOD_CONTROL) != 0;
+        boolean shift = (mods & Keys.MOD_SHIFT) != 0;
 
         if (ctrl) {
             switch (key) {
-                case GLFW.GLFW_KEY_A -> {
+                case Keys.A -> {
                     selAnchor = 0;
                     cursor = text.length();
                     return true;
                 }
-                case GLFW.GLFW_KEY_C -> {
+                case Keys.C -> {
                     if (hasSelection()) clipboard().setClipboard(text.substring(selStart(), selEnd()));
                     return true;
                 }
-                case GLFW.GLFW_KEY_X -> {
+                case Keys.X -> {
                     if (hasSelection()) {
                         clipboard().setClipboard(text.substring(selStart(), selEnd()));
                         deleteSelection();
@@ -216,7 +220,7 @@ public class TextField extends Widget {
                     }
                     return true;
                 }
-                case GLFW.GLFW_KEY_V -> {
+                case Keys.V -> {
                     paste(clipboard().getClipboard());
                     return true;
                 }
@@ -226,7 +230,7 @@ public class TextField extends Widget {
         }
 
         switch (key) {
-            case GLFW.GLFW_KEY_BACKSPACE -> {
+            case Keys.BACKSPACE -> {
                 if (hasSelection()) deleteSelection();
                 else if (cursor > 0) {
                     text.deleteCharAt(cursor - 1);
@@ -236,31 +240,31 @@ public class TextField extends Widget {
                 fireChange();
                 return true;
             }
-            case GLFW.GLFW_KEY_DELETE -> {
+            case Keys.DELETE -> {
                 if (hasSelection()) deleteSelection();
                 else if (cursor < text.length()) text.deleteCharAt(cursor);
                 selAnchor = cursor;
                 fireChange();
                 return true;
             }
-            case GLFW.GLFW_KEY_LEFT -> {
+            case Keys.LEFT -> {
                 if (cursor > 0) cursor--;
                 if (!shift) selAnchor = cursor;
                 blink = 0;
                 return true;
             }
-            case GLFW.GLFW_KEY_RIGHT -> {
+            case Keys.RIGHT -> {
                 if (cursor < text.length()) cursor++;
                 if (!shift) selAnchor = cursor;
                 blink = 0;
                 return true;
             }
-            case GLFW.GLFW_KEY_HOME -> {
+            case Keys.HOME -> {
                 cursor = 0;
                 if (!shift) selAnchor = cursor;
                 return true;
             }
-            case GLFW.GLFW_KEY_END -> {
+            case Keys.END -> {
                 cursor = text.length();
                 if (!shift) selAnchor = cursor;
                 return true;

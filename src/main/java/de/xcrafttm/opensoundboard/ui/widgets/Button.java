@@ -1,5 +1,6 @@
 package de.xcrafttm.opensoundboard.ui.widgets;
 
+import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
 import de.xcrafttm.opensoundboard.ui.UiSound;
@@ -10,30 +11,54 @@ import net.minecraft.network.chat.Component;
 import java.util.function.Consumer;
 
 /**
- * Flat button. Primary = filled indigo; secondary = subtle row fill with a border.
+ * Push button with an optional pixel icon. Modern kinds: primary (accent fill), secondary
+ * (bordered), and ghost (no chrome until hovered). The vanilla style uses Minecraft's button
+ * sprites. A button can also be marked "selected" to act as an on/off toggle.
  */
 public class Button extends Widget {
 
+    public enum Kind { PRIMARY, SECONDARY, GHOST }
+
     private Component label;
+    private Icons icon;
     private final Consumer<Button> onClick;
-    private boolean primary = true;
-    private net.minecraft.client.gui.components.Button vanilla;
-    private int vanillaW = -1;
-    private int vanillaH = -1;
+    private Kind kind = Kind.SECONDARY;
+    private boolean selected = false;
+    private boolean danger = false;
 
     public Button(Component label, Consumer<Button> onClick) {
+        this(null, label, onClick);
+    }
+
+    public Button(Icons icon, Component label, Consumer<Button> onClick) {
+        this.icon = icon;
         this.label = label;
         this.onClick = onClick;
     }
 
-    public Button secondary() {
-        this.primary = false;
+    public Button primary() {
+        this.kind = Kind.PRIMARY;
         return this;
     }
 
-    /** Toggle the filled/accent look at runtime (used as an on/off state indicator). */
-    public Button setPrimary(boolean primary) {
-        this.primary = primary;
+    public Button secondary() {
+        this.kind = Kind.SECONDARY;
+        return this;
+    }
+
+    public Button ghost() {
+        this.kind = Kind.GHOST;
+        return this;
+    }
+
+    /** Destructive/stop action: tinted red while hovered in the modern style. */
+    public Button danger(boolean danger) {
+        this.danger = danger;
+        return this;
+    }
+
+    public Button setSelected(boolean selected) {
+        this.selected = selected;
         return this;
     }
 
@@ -41,42 +66,80 @@ public class Button extends Widget {
         this.label = label;
     }
 
+    public void setIcon(Icons icon) {
+        this.icon = icon;
+    }
+
     @Override
     public void draw(UiCanvas c) {
+        boolean hover = active && c.hovered(x, y, w, h);
         if (UiStyle.useVanillaComponents()) {
-            drawVanilla(c);
+            String sprite = !active ? "widget/button_disabled" : (hover ? "widget/button_highlighted" : "widget/button");
+            c.sprite(sprite, x, y, w, h);
+            int color = active ? UiStyle.VANILLA_TEXT : UiStyle.VANILLA_TEXT_DISABLED;
+            drawContent(c, color, color);
+            if (selected) {
+                int lineW = Math.max(6, Math.min(w - 8, contentWidth(c)));
+                c.fillRect(x + (w - lineW) / 2, y + h - 4, lineW, 1, 0xFFFFFFFF);
+            }
             return;
         }
 
-        boolean hover = active && c.hovered(x, y, w, h);
-        if (primary) {
-            c.fillRoundRect(x, y, w, h, active ? (hover ? Theme.ACCENT_HOVER : Theme.ACCENT) : Theme.BTN_DISABLED);
+        int textColor;
+        int iconColor;
+        if (!active) {
+            if (kind != Kind.GHOST) c.fillRoundRect(x, y, w, h, Theme.controlDisabled);
+            textColor = Theme.textFaint;
+            iconColor = Theme.textFaint;
+        } else if (selected) {
+            c.fillRoundRect(x, y, w, h, hover ? Theme.mix(Theme.accentSoft, Theme.accent, 0.15f) : Theme.accentSoft);
+            c.roundBorder(x, y, w, h, Theme.accent);
+            textColor = Theme.text;
+            iconColor = Theme.accentHover;
+        } else if (kind == Kind.PRIMARY) {
+            c.fillRoundRect(x, y, w, h, hover ? Theme.accentHover : Theme.accent);
+            textColor = Theme.onAccent;
+            iconColor = Theme.onAccent;
+        } else if (kind == Kind.GHOST) {
+            if (hover) c.fillRoundRect(x, y, w, h, Theme.surfaceHover);
+            textColor = hover ? (danger ? Theme.DANGER : Theme.text) : Theme.textMuted;
+            iconColor = textColor;
         } else {
-            c.fillRoundRect(x, y, w, h, !active ? Theme.BTN_DISABLED : (hover ? Theme.BTN_HOVER : Theme.BTN));
-            c.roundBorder(x, y, w, h, hover ? Theme.BORDER_STRONG : Theme.BORDER);
+            c.fillRoundRect(x, y, w, h, hover ? Theme.controlHover : Theme.control);
+            c.roundBorder(x, y, w, h, hover ? (danger ? Theme.DANGER : Theme.borderStrong) : Theme.border);
+            textColor = Theme.text;
+            iconColor = hover && danger ? Theme.DANGER : Theme.text;
         }
-        int textColor = !active ? Theme.TEXT_MUTED : (primary ? Theme.TEXT_ON_ACCENT : Theme.TEXT);
-        c.centeredText(visibleLabel(c), x + w / 2, c.centeredTextY(y, h), textColor);
+        drawContent(c, textColor, iconColor);
     }
 
-    private void drawVanilla(UiCanvas c) {
-        if (vanilla == null || vanillaW != w || vanillaH != h) {
-            vanilla = net.minecraft.client.gui.components.Button.builder(Component.empty(), ignored -> {
-            }).bounds(x, y, w, h).build();
-            vanillaW = w;
-            vanillaH = h;
-        }
-        vanilla.setX(x);
-        vanilla.setY(y);
-        vanilla.setMessage(Component.empty());
-        vanilla.active = active;
-        c.renderVanilla(vanilla);
-        c.centeredText(visibleLabel(c), x + w / 2, c.centeredTextY(y, h),
-                active ? 0xFFFFFFFF : 0xFFA0A0A0);
+    private int contentWidth(UiCanvas c) {
+        String text = labelText();
+        Icons icon = UiStyle.useVanillaComponents() && !text.isEmpty() ? null : this.icon;
+        int width = icon != null ? icon.width : 0;
+        if (!text.isEmpty()) width += (icon != null ? 4 : 0) + c.textWidth(text);
+        return width;
     }
 
-    private Component visibleLabel(UiCanvas c) {
-        return Component.literal(c.trimText(label.getString(), Math.max(0, w - 8)));
+    private String labelText() {
+        return label == null ? "" : label.getString();
+    }
+
+    private void drawContent(UiCanvas c, int textColor, int iconColor) {
+        String text = labelText();
+        Icons icon = UiStyle.useVanillaComponents() && !text.isEmpty() ? null : this.icon;
+        int iconW = icon != null ? icon.width + (text.isEmpty() ? 0 : 4) : 0;
+        String visible = text.isEmpty() ? "" : c.trimText(text, Math.max(0, w - 8 - iconW));
+        int contentW = iconW + (visible.isEmpty() ? 0 : c.textWidth(visible));
+        int cx = x + (w - contentW) / 2;
+        if (icon != null) {
+            c.icon(icon, cx, y + (h - icon.height) / 2, iconColor);
+        }
+        if (icon == null && !text.isEmpty() && UiStyle.useVanillaComponents()) {
+            c.fitText(text, x + 4, c.centeredTextY(y, h), w - 8, textColor);
+        } else if (!visible.isEmpty()) {
+            c.text(visible, cx + iconW, c.centeredTextY(y, h), textColor);
+        }
     }
 
     @Override

@@ -8,7 +8,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
 
@@ -88,11 +87,11 @@ public final class GuiTools {
             return Component.translatable("gui.opensoundboard.keybind.prefix")
                     .append(Component.translatable("gui.opensoundboard.keybind.none"));
         }
-        Component keyName = InputConstants.Type.KEYSYM.getOrCreate(keyBind.getKeyCode()).getDisplayName();
+        Component keyName = Keys.keyboardType().getOrCreate(keyBind.getKeyCode()).getDisplayName();
         MutableComponent full = Component.empty();
-        if ((keyBind.getModifiers() & GLFW.GLFW_MOD_CONTROL) != 0) full.append("Ctrl + ");
-        if ((keyBind.getModifiers() & GLFW.GLFW_MOD_SHIFT) != 0) full.append("Shift + ");
-        if ((keyBind.getModifiers() & GLFW.GLFW_MOD_ALT) != 0) full.append("Alt + ");
+        if ((keyBind.getModifiers() & Keys.MOD_CONTROL) != 0) full.append("Ctrl + ");
+        if ((keyBind.getModifiers() & Keys.MOD_SHIFT) != 0) full.append("Shift + ");
+        if ((keyBind.getModifiers() & Keys.MOD_ALT) != 0) full.append("Alt + ");
         full.append(keyName);
         return Component.translatable("gui.opensoundboard.keybind.prefix").append(full);
     }
