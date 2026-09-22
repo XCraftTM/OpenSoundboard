@@ -224,5 +224,15 @@
   "tooltip.opensoundboard.localPlayback": "When no voice chat is connected, sounds still play on this computer.",
   "message.opensoundboard.no_output": "Nothing to play through. Connect to voice chat or turn on local playback.",
   "gui.opensoundboard.downloader.last_folder": "Save to last folder",
-  "tooltip.opensoundboard.downloader.last_folder": "On: downloads go into the folder you last opened in the soundboard. Off: into the main sounds folder."
+  "tooltip.opensoundboard.downloader.last_folder": "On: downloads go into the folder you last opened in the soundboard. Off: into the main sounds folder.",
+  "option.opensoundboard.voiceChat": "Voice chat",
+  "tooltip.opensoundboard.voiceChat": "Which voice chat to use when both are connected.",
+  "config.opensoundboard.voiceChat.auto": "Automatic",
+  "gui.opensoundboard.output.paused": "%s paused, only you hear it",
+  "option.opensoundboard.masterVolumeOnMainScreen": "Master volume on main screen",
+  "tooltip.opensoundboard.masterVolumeOnMainScreen": "The main screen's sliders change the master volume instead of the selected sound.",
+  "gui.opensoundboard.master_local_volume": "All sounds, you: %s%%",
+  "gui.opensoundboard.master_player_volume": "All sounds, others: %s%%",
+  "gui.opensoundboard.master_sync_volume": "Master volume: %s%%",
+  "tooltip.opensoundboard.master_volume": "How loud all sounds are for you and others."
 }

@@ -73,6 +73,18 @@ public final class Keys {
         *///?}
     }
 
+    /**
+     * Mouse button from an input event, normalized to 0 = left, 1 = right, 2 = middle. 26.3 (SDL)
+     * numbers buttons from 1; all widgets use the 0-based GLFW numbering.
+     */
+    public static int uiMouseButton(int button) {
+        //? if >=26.3 {
+        return button - 1;
+        //?} else {
+        /*return button;
+        *///?}
+    }
+
     /** Whether the bound key or mouse button of {@code key} is currently held. */
     public static boolean isDown(InputConstants.Key key) {
         return key.getType() == InputConstants.Type.MOUSE ? isMouseDown(key.getValue()) : isKeyDown(key.getValue());

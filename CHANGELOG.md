@@ -1,3 +1,31 @@
+## OpenSoundboard 0.5.1
+
+A small follow-up to 0.5.0 with a few new options and several fixes.
+
+### New
+
+- **Master volume on the main screen**: a new option in Settings → Audio replaces the per-sound volume sliders on the main screen with the master volume. You get one slider with "Link volumes" on, or two (you and others) with it off.
+- **Choose your voice chat**: with both Simple Voice Chat and Plasmo Voice installed, Settings → Audio lets you pick which one to use, or leave it on Automatic.
+
+### Fixes
+
+- Fixed buttons in the OpenSoundboard screens not reacting to clicks on Minecraft 26.3.
+- Fixed songs freezing when voice chat is turned off in Simple Voice Chat. Sounds now keep playing locally, and the output shows as "paused, only you hear it" until voice chat is turned back on. Muting only your microphone works as before.
+- Long values in the settings (like the current output) now wrap onto several lines instead of being cut off.
+- Every line of a tooltip is now white; before, only the first line was.
+- In the Vanilla style, the selection outline in the sound list is no longer cut off on the left.
+
+### Other Changes
+
+- Updated to Simple Voice Chat 2.6.24, Fabric API 0.161.0 (26.2 and 26.3), and Fabric Loader 0.19.5.
+- Updated the build tools (Gradle 9.7.1, Loom 1.18.2, Stonecutter 0.9.8).
+
+### Good to Know
+
+- Fabric Loader 0.19.5 or newer is now required. On 26.2 and 26.3, Fabric API 0.161.0 or newer is required.
+
+---
+
 ## OpenSoundboard 0.5.0 - Redesign & Plasmo Voice Update
 
 This release rebuilds the whole interface, adds Plasmo Voice support, makes voice chat optional, turns the sound wheel into a pie menu, and lets you search YouTube right from the game.

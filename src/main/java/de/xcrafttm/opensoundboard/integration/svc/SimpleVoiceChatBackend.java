@@ -26,6 +26,11 @@ public final class SimpleVoiceChatBackend implements VoiceBackend {
     }
 
     @Override
+    public String id() {
+        return "svc";
+    }
+
+    @Override
     public String name() {
         return "Simple Voice Chat";
     }

@@ -36,6 +36,11 @@ public final class LocalAudioBackend implements VoiceBackend {
     }
 
     @Override
+    public String id() {
+        return "local";
+    }
+
+    @Override
     public String name() {
         return Component.translatable("gui.opensoundboard.output.local").getString();
     }

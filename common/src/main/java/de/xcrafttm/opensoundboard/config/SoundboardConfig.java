@@ -44,9 +44,11 @@ public class SoundboardConfig {
     boolean playWhileMuted = true;
     boolean playLocally = true;
     boolean localPlayback = true; // play on this computer when no voice chat is connected
+    String preferredVoiceChat = "auto"; // backend id to use when several voice chats are connected
     float globalLocalVolume = 0.2f;
     float globalPlayerVolume = 0.2f;
     boolean syncGlobalVolume = false;
+    boolean masterVolumeOnMainScreen = false; // main screen shows master sliders instead of per-sound ones
     boolean singleSongAtATime = true;
     boolean loopAll = false;
     boolean syncAudio = false;

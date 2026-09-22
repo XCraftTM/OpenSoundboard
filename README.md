@@ -93,7 +93,7 @@ JAVA_HOME=<jdk-25> ./gradlew build
 JAVA_HOME=<jdk-25> ./gradlew buildAllJars
 ```
 
-The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.5.0+mc26.3.jar`. (Each is also left in `versions/<version>/build/libs/`.)
+The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.5.1+mc26.3.jar`. (Each is also left in `versions/<version>/build/libs/`.)
 
 To work on a single version, switch the active version first, then build or run just that node:
 
@@ -104,6 +104,19 @@ To work on a single version, switch the active version first, then build or run 
 ```
 
 > Minecraft 26.x builds require the Gradle daemon to run on Java 25 (set `JAVA_HOME` accordingly); 1.21.x versions target Java 21 but build fine on a Java 25 daemon too. The root `build` task delegates to the isolated Stonecutter builds; use a fully qualified task such as `:1.21.11:build` when working on only the active version.
+
+### Publishing to Modrinth
+
+`modrinth.bat` (Windows) builds every version, takes the `## OpenSoundboard <mod_version>` section of `CHANGELOG.md` as the changelog, shows a summary, and uploads one Modrinth version per jar after you confirm:
+
+```bat
+modrinth.bat --dry-run      :: build and show what would be uploaded
+modrinth.bat                :: build, confirm, upload
+modrinth.bat --skip-build   :: upload the jars already in build\jars
+modrinth.bat --type=beta    :: upload as beta (or alpha)
+```
+
+The token (with the "Create versions" scope) is read from `MODRINTH_TOKEN`, from `modrinth_token` in `%USERPROFILE%\.gradle\gradle.properties`, or asked for. Versions already on Modrinth are skipped, so a failed run can simply be repeated.
 
 ## Credits
 

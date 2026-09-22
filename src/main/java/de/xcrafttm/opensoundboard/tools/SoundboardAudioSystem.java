@@ -47,7 +47,12 @@ public final class SoundboardAudioSystem {
 
     private static volatile Mp3Decoder nativeDecoder;
 
+    /** Voice chats request a frame every 20 ms; this much silence means they stopped. */
+    private static final long VOICE_STALL_NANOS = 150_000_000L;
+
     private static final List<VoiceBackend> backends = new CopyOnWriteArrayList<>();
+    /** System.nanoTime() of the last frame the active voice chat requested. */
+    private static volatile long lastVoiceFrame = 0L;
     private static final ConcurrentLinkedQueue<PlayingSound> activeSounds = new ConcurrentLinkedQueue<>();
 
     /**
@@ -77,12 +82,49 @@ public final class SoundboardAudioSystem {
         backends.sort(Comparator.comparingInt(VoiceBackend::priority));
     }
 
-    /** The connected output with the highest priority (voice chats before local playback), or null. */
+    /**
+     * The output sounds go to: the voice chat picked in the settings if it is connected, otherwise
+     * the connected output with the highest priority (voice chats before local playback), or null.
+     */
     public static VoiceBackend activeBackend() {
+        String preferred = SoundboardConfig.data == null ? null : SoundboardConfig.data.getPreferredVoiceChat();
+        if (preferred != null && !"auto".equals(preferred)) {
+            for (VoiceBackend backend : backends) {
+                if (backend.id().equals(preferred) && backend.isConnected()) return backend;
+            }
+        }
         for (VoiceBackend backend : backends) {
             if (backend.isConnected()) return backend;
         }
         return null;
+    }
+
+    /** Every installed voice chat backend (local playback excluded), in priority order. */
+    public static List<VoiceBackend> voiceChats() {
+        return backends.stream().filter(b -> !b.localOnly()).toList();
+    }
+
+    /**
+     * Whether the active voice chat has stopped taking audio, e.g. Simple Voice Chat with voice chat
+     * disabled (it stops polling the microphone, so no frames are requested). Local output then
+     * keeps sounds running so they neither freeze nor go silent.
+     */
+    public static boolean isVoiceChatPaused() {
+        VoiceBackend active = activeBackend();
+        return active != null && isPaused(active);
+    }
+
+    private static boolean isPaused(VoiceBackend voiceChat) {
+        return !voiceChat.localOnly()
+                && (voiceChat.isDisabled() || System.nanoTime() - lastVoiceFrame > VOICE_STALL_NANOS);
+    }
+
+    /** Label for the current output, e.g. "Simple Voice Chat" or "Simple Voice Chat (paused, only you)". */
+    public static String outputLabel() {
+        VoiceBackend backend = activeBackend();
+        if (backend == null) return Component.translatable("gui.opensoundboard.output.none").getString();
+        if (isPaused(backend)) return Component.translatable("gui.opensoundboard.output.paused", backend.name()).getString();
+        return backend.name();
     }
 
     /** Use {@code decoder} instead of the bundled pure-Java decoder (it stays as the fallback). */
@@ -106,8 +148,16 @@ public final class SoundboardAudioSystem {
      * @param sampleRate the backend's sample rate
      */
     public static Frame mixFrame(VoiceBackend backend, int samples, int sampleRate) {
-        if (backend != activeBackend()) return null;
-        if (backend.isDisabled() || (backend.isMicMuted() && !SoundboardConfig.data.isPlayWhileMuted())) {
+        VoiceBackend active = activeBackend();
+        if (active == null) return null;
+        if (backend != active) {
+            // Local output stands in while the active voice chat is paused.
+            if (!backend.localOnly() || !isPaused(active)) return null;
+        } else if (!backend.localOnly()) {
+            if (backend.isDisabled()) return null;
+            lastVoiceFrame = System.nanoTime();
+        }
+        if (active.isMicMuted() && !SoundboardConfig.data.isPlayWhileMuted()) {
             if (!activeSounds.isEmpty()) activeSounds.clear();
             return null;
         }

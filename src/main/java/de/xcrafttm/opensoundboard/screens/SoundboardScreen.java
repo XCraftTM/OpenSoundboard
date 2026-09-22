@@ -148,8 +148,15 @@ public class SoundboardScreen extends OsbScreen {
         return w;
     }
 
+    /** Whether the volume sliders control the master volume instead of the selected sound. */
+    private static boolean masterSliders() {
+        return SoundboardConfig.data.isMasterVolumeOnMainScreen();
+    }
+
     private void buildDetails(int ctl, int gap, int nameLineH) {
-        boolean sync = SoundboardConfig.data.isSyncAudio();
+        boolean master = masterSliders();
+        boolean sync = master ? SoundboardConfig.data.isSyncGlobalVolume() : SoundboardConfig.data.isSyncAudio();
+        String prefix = master ? "gui.opensoundboard.master_" : "gui.opensoundboard.";
         int y = detailsTop;
 
         int bindW = Math.min(130, bodyW / 3);
@@ -159,10 +166,10 @@ public class SoundboardScreen extends OsbScreen {
         y += nameLineH + gap;
 
         localSlider = detail(new Slider(0, v -> onVolume(v, true)).readout(v -> Component.translatable(
-                sync ? "gui.opensoundboard.sync_volume" : "gui.opensoundboard.local_volume", String.valueOf(pct(v))))
+                prefix + (sync ? "sync_volume" : "local_volume"), String.valueOf(pct(v))))
                 .onCommit(v -> SoundboardConfig.save()));
         playerSlider = detail(new Slider(0, v -> onVolume(v, false))
-                .readout(v -> Component.translatable("gui.opensoundboard.player_volume", String.valueOf(pct(v))))
+                .readout(v -> Component.translatable(prefix + "player_volume", String.valueOf(pct(v))))
                 .onCommit(v -> SoundboardConfig.save()));
         if (sync) {
             localSlider.bounds(bodyX, y, bodyW, ctl);
@@ -173,8 +180,13 @@ public class SoundboardScreen extends OsbScreen {
             localSlider.bounds(bodyX, y, half, ctl);
             playerSlider.bounds(bodyX + bodyW - half, y, half, ctl);
         }
-        localSlider.tooltip(tip("tooltip.opensoundboard.local_volume"));
-        playerSlider.tooltip(tip("tooltip.opensoundboard.player_volume"));
+        if (master) {
+            localSlider.tooltip(tip(sync ? "tooltip.opensoundboard.master_volume" : "tooltip.opensoundboard.globalLocalVolume"));
+            playerSlider.tooltip(tip("tooltip.opensoundboard.globalPlayerVolume"));
+        } else {
+            localSlider.tooltip(tip("tooltip.opensoundboard.local_volume"));
+            playerSlider.tooltip(tip("tooltip.opensoundboard.player_volume"));
+        }
         y += ctl + gap;
 
         timeline = detail(new Slider(0, v -> {
@@ -367,22 +379,33 @@ public class SoundboardScreen extends OsbScreen {
 
     private void refreshDetails() {
         boolean hasSelection = selected != null;
+        boolean master = masterSliders();
         for (Widget w : details) w.active = hasSelection;
         loopBtn.active = true;
         loopBtn.setSelected(SoundboardConfig.data.isLoopAll());
+        if (master) {
+            localSlider.active = true;
+            playerSlider.active = true;
+            localSlider.set(SoundboardConfig.data.getGlobalLocalVolume());
+            playerSlider.set(SoundboardConfig.data.getGlobalPlayerVolume());
+        }
 
         if (!hasSelection) {
             pauseBtn.setIcon(Icons.PLAY);
-            localSlider.set(0);
-            playerSlider.set(0);
+            if (!master) {
+                localSlider.set(0);
+                playerSlider.set(0);
+            }
             timeline.set(0);
             bindBtn.setLabel(GuiTools.keyBindLabel(null));
             return;
         }
         String key = selected.getName();
         var data = SoundboardConfig.get(key);
-        localSlider.set(data.getLocalVolume());
-        playerSlider.set(data.getPlayerVolume());
+        if (!master) {
+            localSlider.set(data.getLocalVolume());
+            playerSlider.set(data.getPlayerVolume());
+        }
         bindBtn.setLabel(binding
                 ? Component.translatable("gui.opensoundboard.keybind.listening")
                 : GuiTools.keyBindLabel(data.getKeybind()));
@@ -429,7 +452,7 @@ public class SoundboardScreen extends OsbScreen {
     /** Shows where sounds currently go: a voice chat, local-only playback, or nowhere. */
     private void renderOutputStatus(UiCanvas c) {
         VoiceBackend backend = SoundboardAudioSystem.activeBackend();
-        String status = backend != null ? backend.name() : tip("gui.opensoundboard.output.none");
+        String status = SoundboardAudioSystem.outputLabel();
         if (vanilla()) {
             int color = backend == null ? 0xFFFF5555 : UiStyle.VANILLA_TEXT_MUTED;
             c.rightText(c.trimText(status, this.width / 3), this.width - 8, (UiStyle.VANILLA_HEADER_H - c.lineHeight()) / 2 + 1, color);
@@ -439,15 +462,21 @@ public class SoundboardScreen extends OsbScreen {
         int maxW = frameX + frameW - 5 * 18 - 8 - (titleEnd + 12);
         if (maxW < 30) return;
         int textY = c.centeredTextY(frameY, Theme.HEADER_H + 1);
-        int dotColor = backend == null ? Theme.DANGER : (backend.localOnly() ? Theme.textFaint : Theme.accent);
+        int dotColor = backend == null ? Theme.DANGER
+                : (backend.localOnly() || SoundboardAudioSystem.isVoiceChatPaused() ? Theme.textFaint : Theme.accent);
         c.fillRect(titleEnd + 8, textY + c.lineHeight() / 2 - 2, 3, 3, dotColor);
         c.text(c.trimText(status, maxW), titleEnd + 15, textY, Theme.textFaint);
     }
 
     private void onVolume(double v, boolean local) {
+        float f = (float) v;
+        if (masterSliders()) {
+            if (SoundboardConfig.data.isSyncGlobalVolume() || local) SoundboardConfig.data.setGlobalLocalVolume(f);
+            if (SoundboardConfig.data.isSyncGlobalVolume() || !local) SoundboardConfig.data.setGlobalPlayerVolume(f);
+            return;
+        }
         if (selected == null) return;
         var data = SoundboardConfig.get(selected.getName());
-        float f = (float) v;
         if (SoundboardConfig.data.isSyncAudio()) {
             data.setLocalVolume(f);
             data.setPlayerVolume(f);

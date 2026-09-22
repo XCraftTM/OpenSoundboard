@@ -7,6 +7,7 @@ import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import de.xcrafttm.opensoundboard.tools.VoiceBackend;
 import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
+import de.xcrafttm.opensoundboard.ui.TextWrap;
 import de.xcrafttm.opensoundboard.ui.Theme;
 import de.xcrafttm.opensoundboard.ui.UiCanvas;
 import de.xcrafttm.opensoundboard.ui.UiStyle;
@@ -147,7 +148,19 @@ public class SoundboardConfigScreen extends OsbScreen {
             }
             case AUDIO -> {
                 o.add(new Section("config.opensoundboard.section.output"));
-                o.add(new Info("option.opensoundboard.currentOutput", currentOutputLabel()));
+                o.add(new Info("option.opensoundboard.currentOutput", Component.literal(SoundboardAudioSystem.outputLabel())));
+                List<VoiceBackend> voiceChats = SoundboardAudioSystem.voiceChats();
+                if (voiceChats.size() > 1) {
+                    List<String> ids = new ArrayList<>();
+                    ids.add("auto");
+                    voiceChats.forEach(b -> ids.add(b.id()));
+                    String current = ids.contains(cfg().getPreferredVoiceChat()) ? cfg().getPreferredVoiceChat() : "auto";
+                    o.add(new Pick<>("option.opensoundboard.voiceChat", ids, current, id -> voiceChats.stream()
+                            .filter(b -> b.id().equals(id)).findFirst()
+                            .<Component>map(b -> Component.literal(b.name()))
+                            .orElse(Component.translatable("config.opensoundboard.voiceChat.auto")),
+                            cfg()::setPreferredVoiceChat, true));
+                }
                 o.add(new Bool("option.opensoundboard.localPlayback", cfg().isLocalPlayback(), cfg()::setLocalPlayback, true));
 
                 o.add(new Section("config.opensoundboard.section.volume"));
@@ -167,6 +180,8 @@ public class SoundboardConfigScreen extends OsbScreen {
                     o.add(new Range("option.opensoundboard.globalPlayerVolume", 0, 1, 0.01, cfg().getGlobalPlayerVolume(),
                             SoundboardConfigScreen::percent, v -> cfg().setGlobalPlayerVolume((float) v), false));
                 }
+                o.add(new Bool("option.opensoundboard.masterVolumeOnMainScreen", cfg().isMasterVolumeOnMainScreen(),
+                        cfg()::setMasterVolumeOnMainScreen, false));
 
                 o.add(new Section("config.opensoundboard.section.sounds"));
                 o.add(new Bool("option.opensoundboard.syncAudio", cfg().isSyncAudio(), cfg()::setSyncAudio, false));
@@ -224,13 +239,6 @@ public class SoundboardConfigScreen extends OsbScreen {
             }
         }
         return o;
-    }
-
-    private static Component currentOutputLabel() {
-        VoiceBackend backend = SoundboardAudioSystem.activeBackend();
-        return backend != null
-                ? Component.literal(backend.name())
-                : Component.translatable("gui.opensoundboard.output.none");
     }
 
     private static Component wheelKeyLabel() {
@@ -339,11 +347,14 @@ public class SoundboardConfigScreen extends OsbScreen {
                     : "option.opensoundboard.accentColor";
             int reserved = opt instanceof Bool ? 14
                     : opt instanceof AccentColor ? 0
-                    : opt instanceof Info info ? Math.min(ctlW, (int) Math.ceil(font.width(info.value().getString()) * UiStyle.fontScale()) + 4)
+                    : opt instanceof Info info ? balancedWidth(info.value().getString(), Math.max(ctlW, w * 9 / 20))
                     : ctlW;
             String desc = description(key);
             int rowH = OptionRow.rowHeight(font, lh, desc, OptionRow.textWidth(w, reserved), ctlH);
             if (opt instanceof AccentColor) rowH += 18;
+            // Long read-only values wrap onto several lines instead of being cut off.
+            List<String> infoLines = opt instanceof Info info ? TextWrap.wrap(font, info.value().getString(), reserved, 3) : List.of();
+            rowH = Math.max(rowH, infoLines.size() * (lh + 1) + 10);
 
             if (place) {
                 int cy = y + (rowH - ctlH) / 2;
@@ -368,15 +379,18 @@ public class SoundboardConfigScreen extends OsbScreen {
                     Button button = new Button(a.button(), btn -> a.run().run()).secondary();
                     button.active = a.enabled();
                     panel.addChild(button, w - 6 - bw, cy, bw, ctlH);
-                } else if (opt instanceof Info info) {
+                } else if (opt instanceof Info) {
                     panel.addChild(new OptionRow(title(key), desc, reserved), 0, y, w, rowH);
                     panel.addChild(new Widget() {
                         @Override
                         public void draw(UiCanvas c) {
-                            String value = c.trimText(info.value().getString(), w);
-                            c.rightText(value, x + w, c.centeredTextY(y, h), Theme.accent);
+                            int lineH = c.lineHeight() + 1;
+                            int top = y + (h - infoLines.size() * lineH + 1) / 2 + 1;
+                            for (int i = 0; i < infoLines.size(); i++) {
+                                c.rightText(infoLines.get(i), x + w, top + i * lineH, Theme.accent);
+                            }
                         }
-                    }, w - 6 - reserved, cy, reserved, ctlH);
+                    }, w - 6 - reserved, y, reserved, rowH);
                 } else if (opt instanceof AccentColor) {
                     panel.addChild(new OptionRow(title(key), desc, reserved).alignTop(), 0, y, w, rowH);
                     int swatchSize = 12;
@@ -397,6 +411,27 @@ public class SoundboardConfigScreen extends OsbScreen {
             y += rowH + 2;
         }
         return y;
+    }
+
+    /**
+     * The narrowest width (at most {@code maxWidth}) that wraps {@code text} into as few lines as
+     * {@code maxWidth} does, so the lines come out evenly long instead of leaving one word alone.
+     */
+    private int balancedWidth(String text, int maxWidth) {
+        var font = this.minecraft.font;
+        int full = TextWrap.width(font, text) + 4;
+        if (full <= maxWidth) return full;
+        int lines = TextWrap.wrap(font, text, maxWidth, 0).size();
+        // Never narrower than the longest word, which would get cut off instead of wrapped.
+        int lo = 1;
+        for (String word : text.split(" ")) lo = Math.max(lo, TextWrap.width(font, word));
+        int hi = Math.max(lo, maxWidth);
+        while (lo < hi) {
+            int mid = (lo + hi) / 2;
+            if (TextWrap.wrap(font, text, mid, 0).size() <= lines) hi = mid;
+            else lo = mid + 1;
+        }
+        return lo;
     }
 
     private void setAccent(int rgb) {

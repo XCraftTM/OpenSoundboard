@@ -1,5 +1,6 @@
 package de.xcrafttm.opensoundboard.ui;
 
+import de.xcrafttm.opensoundboard.tools.Keys;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -261,7 +262,7 @@ public abstract class OsbScreen extends Screen {
         c.fillRoundRect(bx, by, bw, bh, Theme.opaque(Theme.header));
         c.roundBorder(bx, by, bw, bh, Theme.borderStrong);
         for (int i = 0; i < lines.size(); i++) {
-            c.text(lines.get(i), bx + pad, by + pad + i * lh, i == 0 ? Theme.text : Theme.textMuted);
+            c.text(lines.get(i), bx + pad, by + pad + i * lh, Theme.text);
         }
     }
 
@@ -284,14 +285,14 @@ public abstract class OsbScreen extends Screen {
     //? if >=1.21.11 {
     @Override
     public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent e, boolean doubleClick) {
-        if (dispatchClick(e.x(), e.y(), e.button())) return true;
+        if (dispatchClick(e.x(), e.y(), Keys.uiMouseButton(e.button()))) return true;
         return super.mouseClicked(e, doubleClick);
     }
 
     @Override
     public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent e, double dragX, double dragY) {
         if (dragging != null) {
-            dragging.mouseDragged(e.x(), e.y(), e.button());
+            dragging.mouseDragged(e.x(), e.y(), Keys.uiMouseButton(e.button()));
             return true;
         }
         return super.mouseDragged(e, dragX, dragY);
@@ -300,7 +301,7 @@ public abstract class OsbScreen extends Screen {
     @Override
     public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent e) {
         if (dragging != null) {
-            dragging.mouseReleased(e.x(), e.y(), e.button());
+            dragging.mouseReleased(e.x(), e.y(), Keys.uiMouseButton(e.button()));
             dragging = null;
             return true;
         }

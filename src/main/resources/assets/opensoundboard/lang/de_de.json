@@ -224,5 +224,15 @@
   "tooltip.opensoundboard.localPlayback": "Ohne Voice-Chat-Verbindung werden Sounds trotzdem auf diesem PC abgespielt.",
   "message.opensoundboard.no_output": "Keine Ausgabe verfügbar. Verbinde dich mit einem Voice-Chat oder aktiviere lokale Wiedergabe.",
   "gui.opensoundboard.downloader.last_folder": "Im letzten Ordner speichern",
-  "tooltip.opensoundboard.downloader.last_folder": "An: Downloads landen im zuletzt im Soundboard geöffneten Ordner. Aus: im Haupt-Sounds-Ordner."
+  "tooltip.opensoundboard.downloader.last_folder": "An: Downloads landen im zuletzt im Soundboard geöffneten Ordner. Aus: im Haupt-Sounds-Ordner.",
+  "option.opensoundboard.voiceChat": "Voice-Chat",
+  "tooltip.opensoundboard.voiceChat": "Welcher Voice-Chat genutzt wird, wenn beide verbunden sind.",
+  "config.opensoundboard.voiceChat.auto": "Automatisch",
+  "gui.opensoundboard.output.paused": "%s pausiert, nur du hörst es",
+  "option.opensoundboard.masterVolumeOnMainScreen": "Gesamtlautstärke im Hauptmenü",
+  "tooltip.opensoundboard.masterVolumeOnMainScreen": "Die Regler im Hauptmenü ändern die Gesamtlautstärke statt des ausgewählten Sounds.",
+  "gui.opensoundboard.master_local_volume": "Alle Sounds, du: %s%%",
+  "gui.opensoundboard.master_player_volume": "Alle Sounds, andere: %s%%",
+  "gui.opensoundboard.master_sync_volume": "Gesamtlautstärke: %s%%",
+  "tooltip.opensoundboard.master_volume": "Wie laut alle Sounds für dich und andere sind."
 }

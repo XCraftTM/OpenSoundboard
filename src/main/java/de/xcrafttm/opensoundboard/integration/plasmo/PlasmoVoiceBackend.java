@@ -42,6 +42,11 @@ public final class PlasmoVoiceBackend implements VoiceBackend {
     }
 
     @Override
+    public String id() {
+        return "plasmo";
+    }
+
+    @Override
     public String name() {
         return "Plasmo Voice";
     }

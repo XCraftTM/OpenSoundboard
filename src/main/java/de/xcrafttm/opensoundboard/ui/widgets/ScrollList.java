@@ -106,7 +106,10 @@ public class ScrollList extends Widget {
 
         int rx = x + inset();
         int rw = rowWidth();
-        c.pushScissor(x + 1, y + 1, w - 2, h - 2);
+        // The modern frame's 1px border stays outside the clip; vanilla rows use the full width so
+        // the selection outline is not cut off.
+        if (UiStyle.useVanillaComponents()) c.pushScissor(x, y, w, h);
+        else c.pushScissor(x + 1, y + 1, w - 2, h - 2);
         int ry = y + inset() - scroll;
         for (Row r : rows) {
             int rh = r.height();

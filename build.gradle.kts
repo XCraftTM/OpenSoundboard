@@ -6,7 +6,6 @@ import java.util.Properties
 plugins {
     id("net.fabricmc.fabric-loom") apply false
     id("net.fabricmc.fabric-loom-remap") apply false
-    id("com.modrinth.minotaur") version "2.8.7"
 }
 
 // --- Per-version properties (from versions/<active>/gradle.properties) -------------------
@@ -21,10 +20,6 @@ fun vpropOrNull(name: String): String? = vprops.getProperty(name)?.takeIf { it.i
 val mcVersion = vprop("minecraft.version")
 // Explicit per-version switch: version naming conventions are not a reliable obfuscation signal.
 val isLegacyObfuscated = vprop("minecraft.obfuscated").toBooleanStrict()
-val publishedGameVersions = (vpropOrNull("modrinth.game.versions") ?: mcVersion)
-    .split(',')
-    .map(String::trim)
-    .filter(String::isNotEmpty)
 
 if (isLegacyObfuscated) apply(plugin = "net.fabricmc.fabric-loom-remap")
 else apply(plugin = "net.fabricmc.fabric-loom")
@@ -131,33 +126,4 @@ tasks.withType<AbstractArchiveTask>().configureEach {
     isReproducibleFileOrder = true
 }
 
-// ---------------------------------------------------------------------------
-// Modrinth publishing. Fabric only — the supported voice chat mods target Fabric, so Quilt
-// is not listed. Provide the token via the MODRINTH_TOKEN env
-// var or a `modrinth_token` property in ~/.gradle/gradle.properties (never committed).
-// One Modrinth version is published per Minecraft version, so switch active + publish each:
-//   ./gradlew stonecutterSwitchTo<ver> && ./gradlew :<ver>:modrinth
-// The changelog comes from the MODRINTH_CHANGELOG env var, else links to the GitHub release.
-// ---------------------------------------------------------------------------
-modrinth {
-    // Validate without uploading: ./gradlew :<ver>:modrinth -PmodrinthDebug
-    debugMode.set(project.hasProperty("modrinthDebug"))
-    token.set(System.getenv("MODRINTH_TOKEN") ?: rootProject.findProperty("modrinth_token")?.toString() ?: "")
-    projectId.set(rootProject.property("modrinth_project_id").toString())
-    versionNumber.set(version.toString())
-    versionName.set("OpenSoundboard $version")
-    versionType.set("release")
-    changelog.set(
-        System.getenv("MODRINTH_CHANGELOG")
-            ?: "Full changelog: https://github.com/XCraftTM/OpenSoundboard/releases/tag/v${rootProject.property("mod_version")}"
-    )
-    uploadFile.set(tasks.named(if (isLegacyObfuscated) "remapJar" else "jar"))
-    gameVersions.set(publishedGameVersions)
-    loaders.set(listOf("fabric"))
-    dependencies {
-        required.project("fabric-api")
-        // One of the two voice chat mods is needed; Modrinth has no "one of", so both are optional.
-        optional.project("simple-voice-chat")
-        optional.project("plasmo-voice")
-    }
-}
+// Publishing to Modrinth is done by modrinth.bat in the project root, not by Gradle.

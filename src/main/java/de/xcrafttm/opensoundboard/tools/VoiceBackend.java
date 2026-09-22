@@ -6,6 +6,9 @@ package de.xcrafttm.opensoundboard.tools;
  */
 public interface VoiceBackend {
 
+    /** Stable id stored in the config, e.g. "svc". */
+    String id();
+
     /** Display name, e.g. "Simple Voice Chat". */
     String name();
 
