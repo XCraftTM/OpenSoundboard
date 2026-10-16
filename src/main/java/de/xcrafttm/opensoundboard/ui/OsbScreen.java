@@ -1,6 +1,7 @@
 package de.xcrafttm.opensoundboard.ui;
 
 import de.xcrafttm.opensoundboard.tools.Keys;
+import de.xcrafttm.opensoundboard.tools.McCompat;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -192,6 +193,11 @@ public abstract class OsbScreen extends Screen {
         return false;
     }
 
+    /** Whether typed characters should reach {@link #screenCharTyped} while no text field is focused. */
+    protected boolean acceptsTypedText() {
+        return false;
+    }
+
     /** Optional screen-level click handling, after no widget consumed the click. */
     protected boolean screenMouseClicked(double mx, double my, int button) {
         return false;
@@ -209,6 +215,7 @@ public abstract class OsbScreen extends Screen {
         dragging = null;
         headerButtons = 0;
         buildUi();
+        updateTextInput();
     }
 
     protected void setFocused(Widget widget) {
@@ -216,6 +223,18 @@ public abstract class OsbScreen extends Screen {
         if (focused != null) focused.setFocused(false);
         focused = widget;
         if (focused != null) focused.setFocused(true);
+        updateTextInput();
+    }
+
+    /** Keep OS text input (needed for character events on 26.3) on only while something takes text. */
+    private void updateTextInput() {
+        McCompat.setTextInput(this, acceptsTypedText() || (focused != null && focused.wantsTextInput()));
+    }
+
+    @Override
+    public void removed() {
+        McCompat.setTextInput(this, false);
+        super.removed();
     }
 
     private void paint(UiCanvas c) {
@@ -382,6 +401,7 @@ public abstract class OsbScreen extends Screen {
             }
         }
         setFocused(hit != null && hit.focusable() ? hit : null);
+        updateTextInput(); // a container may have moved focus between its own children
         if (hit != null) {
             dragging = hit;
             return true;

@@ -8,6 +8,8 @@
   "message.opensoundboard.decode_failed": "Failed to decode sound: %s",
   "message.opensoundboard.empty_url": "Please enter a URL.",
   "message.opensoundboard.binaries_missing": "Could not prepare yt-dlp/ffmpeg. Check your internet connection and game folder permissions.",
+  "message.opensoundboard.ffmpeg_missing": "The downloader needs ffmpeg, which can't be downloaded automatically on this system. Install it (on macOS: brew install ffmpeg) and try again.",
+  "message.opensoundboard.platform_unsupported": "The downloader isn't available for this system. Installing yt-dlp and deno yourself makes it work.",
   "message.opensoundboard.download_completed": "Download completed.",
   "option.opensoundboard.uiWidth": "Window width",
   "tooltip.opensoundboard.uiWidth": "Width of OpenSoundboard windows.",

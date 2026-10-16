@@ -55,6 +55,11 @@ public abstract class Widget {
         return false;
     }
 
+    /** Whether this widget (or its focused child) currently needs typed characters. */
+    public boolean wantsTextInput() {
+        return false;
+    }
+
     public abstract void draw(UiCanvas c);
 
     public boolean mouseClicked(double mx, double my, int button) {

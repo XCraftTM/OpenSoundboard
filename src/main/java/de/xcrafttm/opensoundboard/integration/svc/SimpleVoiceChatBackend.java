@@ -82,7 +82,7 @@ public final class SimpleVoiceChatBackend implements VoiceBackend {
     void onMergeSound(MergeClientSoundEvent event) {
         SoundboardAudioSystem.Frame frame = SoundboardAudioSystem.mixFrame(this, FRAME_SIZE, SoundboardAudioSystem.SAMPLE_RATE);
         if (frame == null) return;
-        event.mergeAudio(frame.player());
+        if (frame.player() != null) event.mergeAudio(frame.player());
         ClientStaticAudioChannel channel = localChannel;
         if (frame.local() != null && channel != null) channel.play(frame.local());
     }

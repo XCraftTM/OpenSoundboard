@@ -20,6 +20,13 @@ val nestedLogFile = projectRoot.resolve("build/nested-gradle.log")
 // Loom variant (remap for 1.21.x vs plain for 26.x) and the per-version dependencies, and it is
 // resolved at configuration time -- so switching + building in one invocation uses the stale version.
 fun gradlew(vararg args: String) {
+    val exit = gradlewExitCode(*args)
+    if (exit != 0) throw GradleException(
+        "`gradlew ${args.joinToString(" ")}` failed (exit $exit); see ${nestedLogFile.relativeTo(projectRoot)}"
+    )
+}
+
+fun gradlewExitCode(vararg args: String): Int {
     val windows = System.getProperty("os.name").lowercase().contains("win")
     // Invoke the wrapper by absolute path: `cmd /c gradlew.bat` searches PATH, not the working
     // directory, so a bare name is not found even with .directory() set.
@@ -39,10 +46,7 @@ fun gradlew(vararg args: String) {
     // The spawned launcher must find a JDK; the daemon's ambient env may not carry JAVA_HOME,
     // so pin it to the JVM this build is already running on (Java 25 when invoked for 26.x).
     pb.environment()["JAVA_HOME"] = System.getProperty("java.home")
-    val exit = pb.start().waitFor()
-    if (exit != 0) throw GradleException(
-        "`gradlew ${args.joinToString(" ")}` failed (exit $exit); see ${nestedLogFile.relativeTo(projectRoot)}"
-    )
+    return pb.start().waitFor()
 }
 
 // Convenience: launch a specific version's client in one command. The active switch is a task
@@ -127,6 +131,51 @@ tasks.register("buildAllJars") {
         }
         delete(stagingDir)
         logger.lifecycle("Release jars collected into build/jars/")
+    }
+}
+
+// Run the automated in-game tests (src/gametest) on every version that supports them (the Fabric
+// client gametest API needs Minecraft 1.21.4+, so 1.21.1 is skipped). Each version opens a real game
+// window and drives it. Screenshots and a report per version are collected into build/gametest/<v>/;
+// a failing version does not stop the others.
+//   JAVA_HOME=<jdk25> ./gradlew testAllVersions
+tasks.register("testAllVersions") {
+    group = "opensoundboard"
+    description = "Run the in-game tests on every supported version and collect screenshots into build/gametest/"
+    doLast {
+        val originalVersion = activeVersionFile.readText().trim()
+        val testable = supportedVersions.filter { v ->
+            val props = java.util.Properties()
+            projectRoot.resolve("versions/$v/gradle.properties").inputStream().use { props.load(it) }
+            props.getProperty("client.gametest")?.toBoolean() == true
+        }
+        val skipped = supportedVersions - testable.toSet()
+        if (skipped.isNotEmpty()) logger.lifecycle("No in-game tests for: ${skipped.joinToString()} (Fabric client gametest API unavailable)")
+
+        val outRoot = projectRoot.resolve("build/gametest")
+        delete(outRoot)
+        nestedLogFile.writeText("")
+        val failed = mutableListOf<String>()
+        try {
+            testable.forEach { v ->
+                gradlew("stonecutterSwitchTo$v")
+                val exit = gradlewExitCode(":$v:runClientGameTest")
+                if (exit != 0) failed += v
+                val runDir = projectRoot.resolve("versions/$v/build/run/clientGameTest")
+                copy {
+                    from(runDir.resolve("screenshots"))
+                    from(runDir) { include("opensoundboard-gametest-report.md") }
+                    from(runDir.resolve("logs")) { include("latest.log") }
+                    into(outRoot.resolve(v))
+                }
+                logger.lifecycle("$v: ${if (exit == 0) "passed" else "FAILED"} -> build/gametest/$v/")
+            }
+        } finally {
+            if (activeVersionFile.readText().trim() != originalVersion) gradlew("stonecutterSwitchTo$originalVersion")
+        }
+        if (failed.isNotEmpty()) throw GradleException(
+            "In-game tests failed on: ${failed.joinToString()}. See build/gametest/<version>/opensoundboard-gametest-report.md"
+        )
     }
 }
 

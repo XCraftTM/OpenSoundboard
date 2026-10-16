@@ -118,6 +118,11 @@ public class ScrollPanel extends Widget {
     }
 
     @Override
+    public boolean wantsTextInput() {
+        return focusedChild != null && focusedChild.wantsTextInput();
+    }
+
+    @Override
     public void setFocused(boolean f) {
         super.setFocused(f);
         if (!f && focusedChild != null) {

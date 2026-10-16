@@ -72,6 +72,11 @@ public class TextField extends Widget {
     }
 
     @Override
+    public boolean wantsTextInput() {
+        return focused && active;
+    }
+
+    @Override
     public void setFocused(boolean f) {
         super.setFocused(f);
         if (!f) selAnchor = cursor;

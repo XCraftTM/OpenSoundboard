@@ -35,8 +35,12 @@ public final class Thumbnails {
 
     private enum Status { LOADING, READY, FAILED }
 
+    /** A thumbnail that failed to load (e.g. a network hiccup) is tried again after this long. */
+    private static final long RETRY_AFTER_MS = 30_000;
+
     private static final class Entry {
         volatile Status status = Status.LOADING;
+        volatile long failedAt;
         //? if >=1.21.11 {
         net.minecraft.resources.Identifier id;
         //?} else {
@@ -66,6 +70,10 @@ public final class Thumbnails {
      */
     public static boolean draw(UiCanvas c, String key, String url, int x, int y, int w, int h) {
         Entry entry = CACHE.get(key);
+        if (entry != null && entry.status == Status.FAILED && System.currentTimeMillis() - entry.failedAt > RETRY_AFTER_MS) {
+            CACHE.remove(key, entry);
+            entry = null;
+        }
         if (entry == null) {
             entry = new Entry();
             CACHE.put(key, entry);
@@ -102,6 +110,7 @@ public final class Thumbnails {
                 byte[] bytes = png.toByteArray();
                 Minecraft.getInstance().execute(() -> upload(key, entry, bytes));
             } catch (Exception e) {
+                entry.failedAt = System.currentTimeMillis();
                 entry.status = Status.FAILED;
             }
         });
@@ -123,6 +132,7 @@ public final class Thumbnails {
             entry.status = Status.READY;
             remember(key);
         } catch (Exception e) {
+            entry.failedAt = System.currentTimeMillis();
             entry.status = Status.FAILED;
         }
     }

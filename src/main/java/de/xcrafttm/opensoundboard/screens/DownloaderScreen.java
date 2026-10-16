@@ -51,6 +51,7 @@ public class DownloaderScreen extends OsbScreen {
     private ScrollList results;
     private Toggle lastFolderToggle;
     private int lastFolderLabelEnd;
+    private String destinationText = "";
 
     private int statusY;
     private int contentTop;
@@ -159,9 +160,10 @@ public class DownloaderScreen extends OsbScreen {
         refreshLastFolderTooltip();
     }
 
+    /** Recomputes the destination text; it checks the disk, so it is not done every frame. */
     private void refreshLastFolderTooltip() {
-        lastFolderToggle.tooltip(tip("tooltip.opensoundboard.downloader.last_folder") + "\n"
-                + Component.translatable("gui.opensoundboard.youtube.save_folder", targetLabel()).getString());
+        destinationText = Component.translatable("gui.opensoundboard.youtube.save_folder", targetLabel()).getString();
+        lastFolderToggle.tooltip(tip("tooltip.opensoundboard.downloader.last_folder") + "\n" + destinationText);
     }
 
     /**
@@ -516,8 +518,7 @@ public class DownloaderScreen extends OsbScreen {
             c.text(label, textX, textY, Theme.text);
             lastFolderLabelEnd = textX + c.textWidth(label);
             int destX = lastFolderLabelEnd + 10;
-            String destination = Component.translatable("gui.opensoundboard.youtube.save_folder", targetLabel()).getString();
-            if (maxX - destX > 30) c.text(c.trimText(destination, maxX - destX), destX, textY, Theme.textFaint);
+            if (maxX - destX > 30) c.text(c.trimText(destinationText, maxX - destX), destX, textY, Theme.textFaint);
         }
     }
 

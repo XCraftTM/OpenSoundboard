@@ -75,8 +75,8 @@ public class SoundWheelOverlay extends OsbScreen {
         if (currentFolder != null) allSounds.add(new File(dir, BACK));
         if (SoundboardConfig.data.isShowSubfolders()) allSounds.addAll(SoundLibrary.folders(dir));
         SoundLibrary.sounds(dir).stream()
-                .filter(f -> !SoundboardConfig.data.isWheelFavoritesOnly() || SoundboardConfig.get(f.getName()).isFavorite())
-                .sorted(Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite()).reversed()
+                .filter(f -> !SoundboardConfig.data.isWheelFavoritesOnly() || SoundboardConfig.get(SoundLibrary.key(f)).isFavorite())
+                .sorted(Comparator.comparing((File f) -> SoundboardConfig.get(SoundLibrary.key(f)).isFavorite()).reversed()
                         .thenComparing(f -> f.getName().toLowerCase()))
                 .forEach(allSounds::add);
     }
@@ -152,8 +152,9 @@ public class SoundWheelOverlay extends OsbScreen {
         if (file.isDirectory()) {
             return new PieWheel.Slice(Icons.FOLDER, Theme.FOLDER, file.getName(), false, false);
         }
-        boolean fav = SoundboardConfig.get(file.getName()).isFavorite();
-        boolean playing = SoundboardAudioSystem.isPlaying(file.getName());
+        String key = SoundLibrary.key(file);
+        boolean fav = SoundboardConfig.get(key).isFavorite();
+        boolean playing = SoundboardAudioSystem.isPlaying(key);
         Icons icon = playing ? Icons.NOTE : (fav ? Icons.STAR : null);
         int iconColor = playing ? (vanilla() ? 0xFFFFFF55 : Theme.accent) : Theme.FAVORITE;
         return new PieWheel.Slice(icon, iconColor, GuiTools.baseName(file), false, playing);
@@ -208,33 +209,9 @@ public class SoundWheelOverlay extends OsbScreen {
     public void playHoveredAndClose() {
         File target = hovered >= 0 && hovered < slots.size() ? slots.get(hovered) : null;
         if (target != null && !isBack(target) && !target.isDirectory()) {
-            playSound(target);
+            SoundboardAudioSystem.trigger(target);
         }
         close();
-    }
-
-    private void playSound(File file) {
-        String name = file.getName();
-        var data = SoundboardConfig.get(name);
-        boolean playing = SoundboardAudioSystem.isPlaying(name);
-        switch (SoundboardConfig.data.getKeybindMode()) {
-            case "pause_resume" -> {
-                if (playing) {
-                    if (SoundboardAudioSystem.isPaused(name)) SoundboardAudioSystem.resume(name);
-                    else SoundboardAudioSystem.pause(name);
-                } else {
-                    SoundboardAudioSystem.playFile(file, data.getLocalVolume(), data.getPlayerVolume());
-                }
-            }
-            case "play_restart" -> {
-                if (playing) SoundboardAudioSystem.stop(name);
-                SoundboardAudioSystem.playFile(file, data.getLocalVolume(), data.getPlayerVolume());
-            }
-            default -> {
-                if (playing) SoundboardAudioSystem.stop(name);
-                else SoundboardAudioSystem.playFile(file, data.getLocalVolume(), data.getPlayerVolume());
-            }
-        }
     }
 
     private void close() {

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "opensoundboard-gametest",
+  "version": "1.0.0",
+  "name": "OpenSoundboard Game Tests",
+  "description": "Automated in-game tests for OpenSoundboard. Development only, never shipped.",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "de.xcrafttm.opensoundboard.gametest.OpenSoundboardGameTest"
+    ]
+  },
+  "depends": {
+    "opensoundboard": "*",
+    "fabric-client-gametest-api-v1": "*"
+  }
+}

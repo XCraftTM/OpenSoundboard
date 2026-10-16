@@ -30,7 +30,10 @@ public class SongPickerScreen extends OsbScreen {
     private TextField search;
     private ScrollList list;
 
-    private String previewingName = null;
+    /** Every sound in the library, read once per build instead of on every keystroke. */
+    private List<File> library;
+    /** Playback id of the running preview ({@link SoundboardAudioSystem#previewKey}), or null. */
+    private String previewingId = null;
     private long previewStartMs = -1;
     private boolean waitingForStart = false;
 
@@ -74,17 +77,18 @@ public class SongPickerScreen extends OsbScreen {
 
     private void buildList() {
         list.clearRows();
+        if (library == null) library = SoundLibrary.allSounds(SoundLibrary.root());
         String query = search == null ? "" : search.getText().trim().toLowerCase();
-        List<File> sorted = SoundLibrary.allSounds(SoundLibrary.root()).stream()
+        List<File> sorted = library.stream()
                 .filter(f -> f.getName().toLowerCase().contains(query))
-                .sorted(Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite()).reversed()
+                .sorted(Comparator.comparing((File f) -> SoundboardConfig.get(SoundLibrary.key(f)).isFavorite()).reversed()
                         .thenComparing(f -> f.getName().toLowerCase()))
                 .collect(Collectors.toList());
         for (File f : sorted) list.addRow(row(f));
     }
 
     private ScrollList.Row row(File file) {
-        final String name = file.getName();
+        final String name = SoundLibrary.key(file);
         final String folderHint = SoundLibrary.folderOf(file);
         return new ScrollList.Row() {
             public int height() {
@@ -109,22 +113,24 @@ public class SongPickerScreen extends OsbScreen {
         };
     }
 
+    /** Previews play only for you (never over voice chat) from a third into the sound, for 15 seconds. */
     private void togglePreview(File file) {
-        if (file.getName().equals(previewingName)) {
+        String id = SoundboardAudioSystem.previewKey(SoundLibrary.key(file));
+        if (id.equals(previewingId)) {
             stopPreview();
             return;
         }
         stopPreview();
-        SoundboardConfig.SoundData data = SoundboardConfig.get(file.getName());
-        SoundboardAudioSystem.playFile(file, data.getLocalVolume(), data.getPlayerVolume());
-        previewingName = file.getName();
+        SoundboardConfig.SoundData data = SoundboardConfig.get(SoundLibrary.key(file));
+        SoundboardAudioSystem.preview(file, data.getLocalVolume(), 1f / 3f);
+        previewingId = id;
         previewStartMs = -1;
         waitingForStart = true;
     }
 
     private void stopPreview() {
-        if (previewingName != null) SoundboardAudioSystem.stop(previewingName);
-        previewingName = null;
+        if (previewingId != null) SoundboardAudioSystem.stop(previewingId);
+        previewingId = null;
         previewStartMs = -1;
         waitingForStart = false;
     }
@@ -132,12 +138,12 @@ public class SongPickerScreen extends OsbScreen {
     @Override
     public void tick() {
         super.tick();
-        if (previewingName == null) return;
-        boolean playing = SoundboardAudioSystem.isPlaying(previewingName);
+        if (previewingId == null) return;
+        boolean playing = SoundboardAudioSystem.isPlaying(previewingId);
         if (waitingForStart) {
-            if (playing) {
-                if (SoundboardAudioSystem.getDurationMillis(previewingName) > 0)
-                    SoundboardAudioSystem.setCursor(previewingName, 1f / 3f);
+            if (!playing) {
+                stopPreview(); // could not be decoded
+            } else if (!SoundboardAudioSystem.isLoading(previewingId)) {
                 previewStartMs = System.currentTimeMillis();
                 waitingForStart = false;
             }

@@ -1,3 +1,43 @@
+## OpenSoundboard 0.6.0
+
+A reliability update: lots of fixes for playback, keybinds, settings, and the Downloader, plus a safer, faster sound library.
+
+### Fixes
+
+- Fixed not being able to type in the search bar (and other text fields) on Minecraft 26.3.
+- Text fields now work with input methods (IME) for Chinese, Japanese, and Korean on Minecraft 26.1 and 26.2.
+- Pressing a sound twice quickly no longer plays it twice, and Stop now works even while a sound is still loading. "One sound at a time" also holds when two sounds start at once.
+- Key combinations like Ctrl + K can now be bound. Before, pressing Ctrl right away bound Ctrl on its own.
+- Keybinds now keep working when you switch between Minecraft versions.
+- Sounds with the same name in different folders now have their own favorite, volumes, and keybind.
+- Settings follow a sound when you move it to another folder (as long as its file name is unique).
+- **Refresh no longer renames your files.** It used to rename sounds silently, turning names with non-Latin letters into "track", and lost their settings.
+- Song previews in the Sound Wheel editor now only play for you, never over voice chat, and no longer stop the sound you were playing.
+- Lowering the number of slots on the Sound Wheel no longer deletes the slots you had assigned beyond it.
+- A broken settings file no longer stops the game from starting. It is set aside as `config.json.broken-<date>` and the defaults are used.
+- Settings are saved safely, so a crash while saving can no longer damage them.
+- Video thumbnails that fail to load are tried again after a moment.
+- Sounds stop when you disconnect from Plasmo Voice, like they already did for Simple Voice Chat.
+
+### Downloader
+
+- Downloaded tools (yt-dlp, ffmpeg, deno) are checked against their official checksums, and a download that was interrupted is no longer mistaken for a finished one.
+- Now works on Linux and on ARM computers (Windows and Linux). On macOS it uses the ffmpeg you installed (for example with `brew install ffmpeg`).
+- yt-dlp updates itself once a day, so YouTube changes do not break downloads for long.
+- A link that is part of a playlist now downloads only that video.
+- Downloads and searches that hang are now stopped after a time limit.
+
+### Performance
+
+- Searching no longer re-reads the whole sounds folder on every key press.
+- Sound lengths are read from the file headers instead of decoding every sound.
+
+### Good to Know
+
+- The first time you use the Downloader after updating, it downloads its tools once more, so they can be verified.
+
+---
+
 ## OpenSoundboard 0.5.1
 
 A small follow-up to 0.5.0 with a few new options and several fixes.

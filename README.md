@@ -93,7 +93,7 @@ JAVA_HOME=<jdk-25> ./gradlew build
 JAVA_HOME=<jdk-25> ./gradlew buildAllJars
 ```
 
-The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.5.1+mc26.3.jar`. (Each is also left in `versions/<version>/build/libs/`.)
+The release jars are collected into `build/jars/` — one per version, e.g. `opensoundboard-0.6.0+mc26.3.jar`. (Each is also left in `versions/<version>/build/libs/`.)
 
 To work on a single version, switch the active version first, then build or run just that node:
 

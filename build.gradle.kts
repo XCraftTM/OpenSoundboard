@@ -17,6 +17,19 @@ fun vprop(name: String): String = vprops.getProperty(name)
     ?: error("Missing version property '$name' for $active.")
 fun vpropOrNull(name: String): String? = vprops.getProperty(name)?.takeIf { it.isNotBlank() }
 
+// The dependencies above come from the *active* version, so a node can only be compiled while it
+// is active. Fail clearly instead of silently compiling e.g. 26.2 sources against 26.3.
+if (project.name != active) {
+    tasks.withType<JavaCompile>().configureEach {
+        doFirst {
+            throw GradleException(
+                "Minecraft ${project.name} is not the active Stonecutter version ($active). " +
+                    "Run `gradlew stonecutterSwitchTo${project.name}` first, or `gradlew buildAllJars` to build every version."
+            )
+        }
+    }
+}
+
 val mcVersion = vprop("minecraft.version")
 // Explicit per-version switch: version naming conventions are not a reliable obfuscation signal.
 val isLegacyObfuscated = vprop("minecraft.obfuscated").toBooleanStrict()
@@ -85,6 +98,22 @@ dependencies {
     // Pure-Java MP3 decoder (MIT), bundled so playback does not depend on a voice chat mod's decoder.
     "implementation"("fr.delthas:javamp3:1.0.1")
     "include"("fr.delthas:javamp3:1.0.1")
+}
+
+// Automated in-game tests: src/gametest drives the real client (clicks, typing, key presses) and
+// saves screenshots. Run with `gradlew :<version>:runClientGameTest`, or `gradlew testAllVersions`.
+// The Fabric client gametest API only exists from Minecraft 1.21.4, so 1.21.1 has no tests.
+if (vpropOrNull("client.gametest")?.toBoolean() == true) {
+    extensions.configure<net.fabricmc.loom.api.fabricapi.FabricApiExtension>("fabricApi") {
+        configureTests {
+            createSourceSet.set(true)
+            modId.set("opensoundboard-gametest")
+            enableGameTests.set(false)
+            enableClientGameTests.set(true)
+            eula.set(true)
+            clearRunDirectory.set(true)
+        }
+    }
 }
 
 tasks.processResources {

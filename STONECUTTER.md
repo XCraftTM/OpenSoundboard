@@ -188,6 +188,29 @@ You can also switch manually and use the generated project task:
 .\gradlew.bat :1.21.11:runClient
 ```
 
+## Automated In-Game Tests
+
+`src/gametest` holds end-to-end tests built on Fabric's client gametest API. They start the real client, open every OpenSoundboard screen, click and type like a player (search, folders, keybinds, settings, downloader, wheel editor, sound wheel in a world), check the results, and take screenshots in both interface styles. The sound library they use is generated (silent MP3s), so nothing in your own `run/` folder is touched.
+
+Run them for the active version (a game window opens and drives itself for about a minute; do not click into it):
+
+```powershell
+.\gradlew.bat :26.3:runClientGameTest
+```
+
+Results land in `versions/<version>/build/run/clientGameTest/`:
+
+- `opensoundboard-gametest-report.md`: every check with PASS/FAIL, plus notes
+- `screenshots/`: one PNG per step, numbered in order
+
+Run them on every version that supports them and collect the results into `build/gametest/<version>/`:
+
+```powershell
+.\gradlew.bat testAllVersions
+```
+
+The client gametest API exists from Minecraft 1.21.4, so 1.21.1 has no in-game tests (`client.gametest=true` in a version's `gradle.properties` turns them on). A failing check does not stop the run; the task fails at the end if anything failed.
+
 ## Editing Version-Dependent Code
 
 Shared code lives in `src/main/java`. Stonecutter directives select different code for different Minecraft versions.
@@ -289,3 +312,6 @@ The full `buildAllJars` task already cleans every version automatically.
 | `client_26_2` | Switch to 26.2 and launch its client |
 | `build` | Build and collect every supported version |
 | `buildAllJars` | Explicit name of the multi-version release build |
+| `:26.3:runClientGameTest` | Run the in-game tests on the active version |
+| `testAllVersions` | Run the in-game tests on every version and collect screenshots |
+| `:common:test` | Run the unit tests |

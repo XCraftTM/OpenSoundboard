@@ -9,6 +9,8 @@ import de.xcrafttm.opensoundboard.tools.KeybindHandler;
 import de.xcrafttm.opensoundboard.tools.LocalAudioBackend;
 import de.xcrafttm.opensoundboard.tools.Keys;
 import de.xcrafttm.opensoundboard.tools.McCompat;
+import de.xcrafttm.opensoundboard.tools.SoundLibrary;
+import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -47,6 +49,9 @@ public class OpenSoundboardClient implements ClientModInitializer {
         }
 
         SoundboardConfig.load();
+        // Older configs keyed sounds by bare file name and stored raw key codes; bring them up to date.
+        SoundLibrary.relinkMissing();
+        if (Keys.upgradeLegacyBinds()) SoundboardConfig.save();
 
         // Voice chats are optional: without one, sounds play locally through LocalAudioBackend.
         // Simple Voice Chat registers itself through its "voicechat" entrypoint (SoundboardPlugin).
@@ -77,7 +82,8 @@ public class OpenSoundboardClient implements ClientModInitializer {
         *///?}
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            KeybindHandler.tick(client, soundDir);
+            SoundboardAudioSystem.tick();
+            KeybindHandler.tick(client);
 
             while (openKey.consumeClick()) {
                 McCompat.setScreen(client, new SoundboardScreen());

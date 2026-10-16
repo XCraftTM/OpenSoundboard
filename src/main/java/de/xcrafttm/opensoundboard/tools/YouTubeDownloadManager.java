@@ -196,12 +196,6 @@ public final class YouTubeDownloadManager {
     }
 
     private static void stopProcess(Process running) {
-        if (running == null) return;
-        running.descendants().forEach(child -> {
-            child.destroy();
-            if (child.isAlive()) child.destroyForcibly();
-        });
-        running.destroy();
-        if (running.isAlive()) running.destroyForcibly();
+        YtDlpManager.destroyTree(running);
     }
 }

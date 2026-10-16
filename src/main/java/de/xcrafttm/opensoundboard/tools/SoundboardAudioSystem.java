@@ -1,5 +1,7 @@
 package de.xcrafttm.opensoundboard.tools;
 
+import de.xcrafttm.opensoundboard.OpenSoundboardClient;
+import de.xcrafttm.opensoundboard.audio.Mp3Duration;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import fr.delthas.javamp3.Sound;
 import net.minecraft.client.Minecraft;
@@ -13,26 +15,31 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Voice-chat-independent playback core: decodes MP3s (48 kHz mono), keeps the playing sounds,
  * and mixes one frame at a time for whichever {@link VoiceBackend} is currently connected.
+ * Sounds are identified by their key ({@link SoundLibrary#key}).
  */
 public final class SoundboardAudioSystem {
 
     public static final int SAMPLE_RATE = 48_000;
 
     /**
-     * One mixed frame: what other players hear (null for local-only output), and what the local
-     * player hears (null if local playback is off).
+     * One mixed frame: what other players hear (null when nothing is sent to them), and what the
+     * local player hears (null when nothing plays locally).
      */
     public record Frame(short[] player, short[] local) {
     }
@@ -51,15 +58,28 @@ public final class SoundboardAudioSystem {
     private static final long VOICE_STALL_NANOS = 150_000_000L;
 
     private static final List<VoiceBackend> backends = new CopyOnWriteArrayList<>();
+    /** Connection state of each voice chat at the last {@link #tick()}, to notice disconnects. */
+    private static final Map<VoiceBackend, Boolean> wasConnected = new HashMap<>();
     /** System.nanoTime() of the last frame the active voice chat requested. */
     private static volatile long lastVoiceFrame = 0L;
     private static final ConcurrentLinkedQueue<PlayingSound> activeSounds = new ConcurrentLinkedQueue<>();
 
     /**
-     * Lightweight duration cache: maps filename → sample count (48 kHz mono).
+     * Sounds that were started but are still decoding, by key → request id. They already count as
+     * playing, so pressing a sound again stops it instead of starting a second copy, and Stop works
+     * before the first sample is heard. A decode only starts playing if its request is still here.
+     */
+    private static final Map<String, Long> loading = new ConcurrentHashMap<>();
+    private static final AtomicLong requestIds = new AtomicLong();
+    /** Guards the hand-over from {@link #loading} to {@link #activeSounds} against stop calls. */
+    private static final Object PLAYBACK_LOCK = new Object();
+
+    /**
+     * Lightweight duration cache: maps sound key → sample count (48 kHz mono).
      * Only stores a single long per file – no PCM data kept in memory.
      */
     private static final ConcurrentHashMap<String, Long> durationCache = new ConcurrentHashMap<>();
+    private static final AtomicBoolean libraryScanQueued = new AtomicBoolean();
 
     /** Single-threaded background executor for duration scanning. */
     private static final ExecutorService scanExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -102,6 +122,16 @@ public final class SoundboardAudioSystem {
     /** Every installed voice chat backend (local playback excluded), in priority order. */
     public static List<VoiceBackend> voiceChats() {
         return backends.stream().filter(b -> !b.localOnly()).toList();
+    }
+
+    /** Called every client tick: stops all sounds when a voice chat disconnects. */
+    public static void tick() {
+        for (VoiceBackend backend : backends) {
+            if (backend.localOnly()) continue;
+            boolean connected = backend.isConnected();
+            Boolean before = wasConnected.put(backend, connected);
+            if (Boolean.TRUE.equals(before) && !connected) stopAll();
+        }
     }
 
     /**
@@ -158,8 +188,8 @@ public final class SoundboardAudioSystem {
             lastVoiceFrame = System.nanoTime();
         }
         if (active.isMicMuted() && !SoundboardConfig.data.isPlayWhileMuted()) {
-            if (!activeSounds.isEmpty()) activeSounds.clear();
-            return null;
+            // Previews only play for the local player, so muting does not stop them.
+            activeSounds.removeIf(s -> !s.previewOnly);
         }
         if (activeSounds.isEmpty()) return null;
 
@@ -172,7 +202,8 @@ public final class SoundboardAudioSystem {
         // Int accumulators prevent intermediate clipping.
         int[] accumulatorPlayer = new int[sourceSamples];
         int[] accumulatorLocal = new int[sourceSamples];
-        boolean hasAudio = false;
+        boolean hasPlayer = false;
+        boolean hasLocal = false;
 
         Iterator<PlayingSound> iterator = activeSounds.iterator();
         while (iterator.hasNext()) {
@@ -182,21 +213,24 @@ public final class SoundboardAudioSystem {
                 continue;
             }
             if (sound.isPaused) continue;
-            hasAudio = true;
+            boolean toPlayer = !localOnly && !sound.previewOnly;
+            boolean toLocal = playLocally || sound.previewOnly;
+            hasPlayer |= toPlayer;
+            hasLocal |= toLocal;
 
             int toRead = Math.min(sourceSamples, sound.remaining(sourceSamples));
             float pVol = sound.playerVolume * globalPlayer;
             float lVol = sound.localVolume * globalLocal;
             for (int i = 0; i < toRead; i++) {
                 short raw = sound.readNext();
-                if (!localOnly) accumulatorPlayer[i] += (int) (raw * pVol);
-                if (playLocally) accumulatorLocal[i] += (int) (raw * lVol);
+                if (toPlayer) accumulatorPlayer[i] += (int) (raw * pVol);
+                if (toLocal) accumulatorLocal[i] += (int) (raw * lVol);
             }
         }
-        if (!hasAudio) return null;
+        if (!hasPlayer && !hasLocal) return null;
 
-        short[] player = localOnly ? null : clampAndResample(accumulatorPlayer, samples);
-        short[] local = playLocally ? clampAndResample(accumulatorLocal, samples) : null;
+        short[] player = hasPlayer ? clampAndResample(accumulatorPlayer, samples) : null;
+        short[] local = hasLocal ? clampAndResample(accumulatorLocal, samples) : null;
         return new Frame(player, local);
     }
 
@@ -225,26 +259,34 @@ public final class SoundboardAudioSystem {
     // Duration scanning (lightweight – no PCM kept in memory)
     // ----------------------------------------------------------------
 
-    /** Scan every sound in the library (all folder depths) in the background. */
+    /**
+     * Measure every sound in the library (all folder depths) that has no known length yet. The
+     * folder walk and the measuring both run in the background.
+     */
     public static void scanDurations() {
-        File soundDir = SoundLibrary.root();
-        if (soundDir == null || !soundDir.exists()) return;
-        for (File file : SoundLibrary.allSounds(soundDir)) {
-            if (!durationCache.containsKey(file.getName())) scanFile(file);
-        }
-    }
-
-    /** Count the samples of a single file in the background without keeping any PCM data. */
-    public static void scanFile(File file) {
+        if (!libraryScanQueued.compareAndSet(false, true)) return;
         scanExecutor.submit(() -> {
-            if (durationCache.containsKey(file.getName())) return;
-            long samples = countSamples(file);
-            if (samples > 0) durationCache.put(file.getName(), samples);
+            libraryScanQueued.set(false);
+            File soundDir = SoundLibrary.root();
+            if (soundDir == null || !soundDir.exists()) return;
+            for (File file : SoundLibrary.allSounds(soundDir)) measure(file);
         });
     }
 
-    public static void invalidateDurationCache(String fileName) {
-        durationCache.remove(fileName);
+    /** Measure a single file in the background without keeping any PCM data. */
+    public static void scanFile(File file) {
+        scanExecutor.submit(() -> measure(file));
+    }
+
+    private static void measure(File file) {
+        String key = SoundLibrary.key(file);
+        if (durationCache.containsKey(key)) return;
+        long samples = countSamples(file);
+        if (samples > 0) durationCache.put(key, samples);
+    }
+
+    public static void invalidateDurationCache(String key) {
+        durationCache.remove(key);
     }
 
     public static void clearDurationCache() {
@@ -255,9 +297,14 @@ public final class SoundboardAudioSystem {
     // Decoding
     // ----------------------------------------------------------------
 
+    /** Length in 48 kHz samples: read from the MP3 frame headers, or by decoding as a fallback. */
     private static long countSamples(File file) {
-        short[] nativePcm = decodeNative(file);
-        if (nativePcm != null) return nativePcm.length;
+        try (InputStream in = Files.newInputStream(file.toPath())) {
+            long micros = Mp3Duration.micros(in);
+            if (micros > 0) return micros * SAMPLE_RATE / 1_000_000L;
+        } catch (IOException ignored) {
+        }
+        // Streams the pure-Java decoder so no PCM is kept, even for very long files.
         try (InputStream in = new BufferedInputStream(Files.newInputStream(file.toPath()));
              Sound sound = new Sound(in)) {
             int bytesPerFrame = sound.isStereo() ? 4 : 2;
@@ -326,7 +373,7 @@ public final class SoundboardAudioSystem {
             short[] pcm = Arrays.copyOf(mono, count);
             return rate == SAMPLE_RATE ? pcm : resample(pcm, rate, SAMPLE_RATE);
         } catch (IOException | RuntimeException e) {
-            System.err.println("Error decoding " + file.getName() + ": " + e.getMessage());
+            OpenSoundboardClient.LOGGER.warn("[OpenSoundboard] Error decoding {}: {}", file.getName(), e.getMessage());
             return null;
         }
     }
@@ -392,11 +439,57 @@ public final class SoundboardAudioSystem {
         *///?}
     }
 
+    /** Play {@code file} with its saved volumes. */
+    public static void play(File file) {
+        var data = SoundboardConfig.get(SoundLibrary.key(file));
+        playFile(file, data.getLocalVolume(), data.getPlayerVolume());
+    }
+
+    /** Play {@code file}, or stop it if it is already playing (or still loading). */
+    public static void toggle(File file) {
+        String key = SoundLibrary.key(file);
+        if (isPlaying(key)) stop(key);
+        else play(file);
+    }
+
+    /** What a sound keybind or the sound wheel does, following the "keybind mode" setting. */
+    public static void trigger(File file) {
+        String key = SoundLibrary.key(file);
+        boolean playing = isPlaying(key);
+        switch (SoundboardConfig.data.getKeybindMode()) {
+            case "pause_resume" -> {
+                if (!playing) play(file);
+                else if (isLoading(key)) stop(key);
+                else if (isPaused(key)) resume(key);
+                else pause(key);
+            }
+            case "play_restart" -> play(file);
+            default -> toggle(file);
+        }
+    }
+
     public static void playFile(File file, float localVol, float playerVol) {
         playFile(file, localVol, playerVol, -1f, false);
     }
 
+    /**
+     * Start {@code file}, replacing any copy of it that is already playing. With "single song at a
+     * time" every other sound stops too.
+     */
     public static void playFile(File file, float localVol, float playerVol, float startProgress, boolean startPaused) {
+        start(file, localVol, playerVol, startProgress, startPaused, false);
+    }
+
+    /**
+     * Play {@code file} for the local player only: it is never sent to voice chat, plays even with
+     * "play locally" off or the microphone muted, and leaves other sounds running. Starting a
+     * preview stops the previous one.
+     */
+    public static void preview(File file, float localVol, float startProgress) {
+        start(file, localVol, 0f, startProgress, false, true);
+    }
+
+    private static void start(File file, float localVol, float playerVol, float startProgress, boolean startPaused, boolean previewOnly) {
         Minecraft client = Minecraft.getInstance();
         VoiceBackend backend = activeBackend();
 
@@ -409,155 +502,185 @@ public final class SoundboardAudioSystem {
             return;
         }
 
-        if (backend.isMicMuted() && !SoundboardConfig.data.isPlayWhileMuted()) {
+        if (!previewOnly && backend.isMicMuted() && !SoundboardConfig.data.isPlayWhileMuted()) {
             if (client.player != null) {
                 actionBar(client.player, Component.translatable("message.opensoundboard.muted_error"));
             }
             return;
         }
 
-        if (SoundboardConfig.data.isSingleSongAtATime()) {
-            stopAll();
+        String key = SoundLibrary.key(file);
+        String id = previewOnly ? previewKey(key) : key;
+        long request = requestIds.incrementAndGet();
+        synchronized (PLAYBACK_LOCK) {
+            if (previewOnly) {
+                activeSounds.removeIf(s -> s.previewOnly);
+                loading.keySet().removeIf(k -> k.startsWith(PREVIEW_PREFIX));
+            } else if (SoundboardConfig.data.isSingleSongAtATime()) {
+                stopAllLocked();
+            }
+            stopLocked(id);
+            loading.put(id, request);
         }
 
         // Decode async on demand – no PCM is kept resident in memory between plays
         CompletableFuture.runAsync(() -> {
             short[] pcmData = decodeMp3(file);
-            if (pcmData != null && pcmData.length > 0) {
-                durationCache.putIfAbsent(file.getName(), (long) pcmData.length);
-                PlayingSound sound = new PlayingSound(file, pcmData, localVol, playerVol);
-                if (startProgress >= 0f) {
-                    sound.setCursor(startProgress);
-                } else {
-                    var data = SoundboardConfig.get(file.getName());
-                    if (data.getStartingPoint() > 0f) sound.setCursor(data.getStartingPoint());
+            if (pcmData == null || pcmData.length == 0) {
+                boolean wanted = loading.remove(id, request);
+                if (wanted) {
+                    client.execute(() -> {
+                        if (client.player != null) {
+                            chat(client.player, Component.translatable("message.opensoundboard.decode_failed", file.getName()));
+                        }
+                    });
                 }
-                sound.isLooping = SoundboardConfig.data.isLoopAll();
-                sound.isPaused = startPaused;
-                activeSounds.add(sound);
+                return;
+            }
+            durationCache.putIfAbsent(key, (long) pcmData.length);
+            PlayingSound sound = new PlayingSound(id, file, pcmData, localVol, playerVol, previewOnly);
+            if (startProgress >= 0f) {
+                sound.setCursor(startProgress);
             } else {
-                client.execute(() -> {
-                    if (client.player != null) {
-                        chat(client.player, Component.translatable("message.opensoundboard.decode_failed", file.getName()));
-                    }
-                });
+                var data = SoundboardConfig.get(key);
+                if (data.getStartingPoint() > 0f) sound.setCursor(data.getStartingPoint());
+            }
+            sound.isLooping = !previewOnly && SoundboardConfig.data.isLoopAll();
+            sound.isPaused = startPaused;
+            synchronized (PLAYBACK_LOCK) {
+                // Stopped or replaced while decoding: drop it.
+                if (!loading.remove(id, request)) return;
+                activeSounds.add(sound);
             }
         });
     }
 
-    public static boolean isPlaying(String file) {
+    private static final String PREVIEW_PREFIX = "\0preview:";
+
+    /**
+     * Playback id of the preview of {@code key}. Previews are separate from the sound playing for
+     * real, so previewing never stops or moves it; pass this id to {@link #isPlaying}, {@link #stop}…
+     */
+    public static String previewKey(String key) {
+        return PREVIEW_PREFIX + key;
+    }
+
+    /** Whether {@code key} is playing, paused, or still loading. */
+    public static boolean isPlaying(String key) {
+        if (loading.containsKey(key)) return true;
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file) && !s.isFinished()) return true;
+            if (s.key.equals(key) && !s.isFinished()) return true;
         }
         return false;
     }
 
-    public static void stop(String file) {
-        activeSounds.removeIf(s -> s.name.equals(file));
+    /** Whether {@code key} was started but is still being decoded. */
+    public static boolean isLoading(String key) {
+        return loading.containsKey(key);
     }
 
-    public static void pause(String file) {
-        for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) s.isPaused = true;
+    public static void stop(String key) {
+        synchronized (PLAYBACK_LOCK) {
+            stopLocked(key);
         }
     }
 
-    public static void resume(String file) {
+    private static void stopLocked(String key) {
+        loading.remove(key);
+        activeSounds.removeIf(s -> s.key.equals(key));
+    }
+
+    public static void stopAll() {
+        synchronized (PLAYBACK_LOCK) {
+            stopAllLocked();
+        }
+    }
+
+    private static void stopAllLocked() {
+        loading.clear();
+        activeSounds.clear();
+    }
+
+    public static void pause(String key) {
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) s.isPaused = false;
+            if (s.key.equals(key)) s.isPaused = true;
+        }
+    }
+
+    public static void resume(String key) {
+        for (PlayingSound s : activeSounds) {
+            if (s.key.equals(key)) s.isPaused = false;
         }
     }
 
     public static void setGlobalLooping(boolean looping) {
-        for (PlayingSound s : activeSounds) s.isLooping = looping;
-    }
-
-    public static void setCursor(String file, float progress) {
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) s.setCursor(progress);
+            if (!s.previewOnly) s.isLooping = looping;
         }
     }
 
-    public static void skip(String file, int seconds) {
+    public static void setCursor(String key, float progress) {
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) s.skip(seconds);
+            if (s.key.equals(key)) s.setCursor(progress);
         }
     }
 
-    public static float getProgress(String file) {
+    public static void skip(String key, int seconds) {
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) return s.progress();
+            if (s.key.equals(key)) s.skip(seconds);
+        }
+    }
+
+    public static float getProgress(String key) {
+        for (PlayingSound s : activeSounds) {
+            if (s.key.equals(key)) return s.progress();
         }
         return -1f;
     }
 
-    public static int getTimeSeconds(String file) {
+    public static long getTimeMillis(String key) {
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) return s.timeSeconds();
+            if (s.key.equals(key)) return s.timeMillis();
         }
         return 0;
     }
 
-    public static long getTimeMillis(String file) {
+    public static long getDurationMillis(String key) {
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) return s.timeMillis();
+            if (s.key.equals(key)) return s.durationMillis();
         }
-        return 0;
-    }
-
-    public static int getDurationSeconds(String file) {
-        for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) return s.durationSeconds();
-        }
-        Long samples = durationCache.get(file);
-        return samples != null ? (int) (samples / SAMPLE_RATE) : 0;
-    }
-
-    public static long getDurationMillis(String file) {
-        for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file)) return s.durationMillis();
-        }
-        Long samples = durationCache.get(file);
+        Long samples = durationCache.get(key);
         return samples != null ? samples * 1000L / SAMPLE_RATE : 0;
     }
 
-    public static boolean isPaused(String file) {
+    public static boolean isPaused(String key) {
         for (PlayingSound s : activeSounds) {
-            if (s.name.equals(file) && s.isPaused) return true;
+            if (s.key.equals(key) && s.isPaused) return true;
         }
         return false;
     }
 
-    public static String getActiveSoundName() {
-        for (PlayingSound s : activeSounds) {
-            if (!s.isFinished()) return s.name;
-        }
-        return null;
-    }
-
+    /** The first sound that is playing for real (previews excluded), or null. */
     public static File getActiveSoundFile() {
         for (PlayingSound s : activeSounds) {
-            if (!s.isFinished()) return s.file;
+            if (!s.isFinished() && !s.previewOnly) return s.file;
         }
         return null;
     }
 
-    public static void setVolume(String file, float localVol, float playerVol) {
+    public static void setVolume(String key, float localVol, float playerVol) {
         for (PlayingSound sound : activeSounds) {
-            if (sound.name.equals(file)) {
+            if (sound.key.equals(key) && !sound.previewOnly) {
                 sound.localVolume = localVol;
                 sound.playerVolume = playerVol;
             }
         }
     }
 
-    public static void stopAll() {
-        activeSounds.clear();
-    }
-
     private static final class PlayingSound {
-        final String name;
+        final String key;
         final File file;
+        final boolean previewOnly;
         private final short[] samples;
 
         volatile float localVolume;
@@ -567,12 +690,13 @@ public final class SoundboardAudioSystem {
         volatile boolean isPaused = false;
         volatile boolean isLooping = false;
 
-        private PlayingSound(File file, short[] samples, float localVolume, float playerVolume) {
-            this.name = file.getName();
+        private PlayingSound(String key, File file, short[] samples, float localVolume, float playerVolume, boolean previewOnly) {
+            this.key = key;
             this.file = file;
             this.samples = samples;
             this.localVolume = localVolume;
             this.playerVolume = playerVolume;
+            this.previewOnly = previewOnly;
         }
 
         boolean isFinished() {
@@ -587,16 +711,8 @@ public final class SoundboardAudioSystem {
             return samples.length == 0 ? 0f : (float) cursor / samples.length;
         }
 
-        int timeSeconds() {
-            return cursor / SAMPLE_RATE;
-        }
-
         long timeMillis() {
             return (long) cursor * 1000L / SAMPLE_RATE;
-        }
-
-        int durationSeconds() {
-            return samples.length / SAMPLE_RATE;
         }
 
         long durationMillis() {

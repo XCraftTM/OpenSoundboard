@@ -2,6 +2,7 @@ package de.xcrafttm.opensoundboard.screens;
 
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import de.xcrafttm.opensoundboard.tools.GuiTools;
+import de.xcrafttm.opensoundboard.tools.SoundLibrary;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.Theme;
@@ -47,10 +48,10 @@ final class SoundRows {
      */
     static void drawSound(UiCanvas c, File file, int rx, int ry, int rw, int rh,
                           boolean selected, boolean hovered, boolean showStar, String folderHint) {
-        String name = file.getName();
+        String key = SoundLibrary.key(file);
         boolean vanilla = UiStyle.useVanillaComponents();
-        boolean playing = SoundboardAudioSystem.isPlaying(name);
-        boolean fav = SoundboardConfig.get(name).isFavorite();
+        boolean playing = SoundboardAudioSystem.isPlaying(key) || SoundboardAudioSystem.isPlaying(SoundboardAudioSystem.previewKey(key));
+        boolean fav = SoundboardConfig.get(key).isFavorite();
         ScrollList.drawRowBackground(c, rx, ry, rw, rh, selected, hovered);
 
         boolean playHover = hovered && c.hovered(rx, ry, PLAY_W, rh);
@@ -76,7 +77,7 @@ final class SoundRows {
             nameX = rx + PLAY_W + STAR_W + 3;
         }
 
-        long millis = SoundboardAudioSystem.getDurationMillis(name);
+        long millis = SoundboardAudioSystem.getDurationMillis(key);
         String duration = millis > 0 ? GuiTools.formatTimeSeconds((int) (millis / 1000)) : "";
         int durationW = duration.isEmpty() ? 0 : c.textWidth(duration) + 8;
         int textY = c.centeredTextY(ry, rh);

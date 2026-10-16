@@ -87,11 +87,12 @@ public final class GuiTools {
             return Component.translatable("gui.opensoundboard.keybind.prefix")
                     .append(Component.translatable("gui.opensoundboard.keybind.none"));
         }
-        Component keyName = Keys.keyboardType().getOrCreate(keyBind.getKeyCode()).getDisplayName();
+        Component keyName = Keys.boundKey(keyBind).getDisplayName();
+        boolean legacy = keyBind.isLegacy();
         MutableComponent full = Component.empty();
-        if ((keyBind.getModifiers() & Keys.MOD_CONTROL) != 0) full.append("Ctrl + ");
-        if ((keyBind.getModifiers() & Keys.MOD_SHIFT) != 0) full.append("Shift + ");
-        if ((keyBind.getModifiers() & Keys.MOD_ALT) != 0) full.append("Alt + ");
+        if (legacy ? (keyBind.getModifiers() & Keys.MOD_CONTROL) != 0 : keyBind.isCtrl()) full.append("Ctrl + ");
+        if (legacy ? (keyBind.getModifiers() & Keys.MOD_SHIFT) != 0 : keyBind.isShift()) full.append("Shift + ");
+        if (legacy ? (keyBind.getModifiers() & Keys.MOD_ALT) != 0 : keyBind.isAlt()) full.append("Alt + ");
         full.append(keyName);
         return Component.translatable("gui.opensoundboard.keybind.prefix").append(full);
     }

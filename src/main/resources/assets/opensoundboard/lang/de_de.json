@@ -8,6 +8,8 @@
   "message.opensoundboard.decode_failed": "Sound konnte nicht dekodiert werden: %s",
   "message.opensoundboard.empty_url": "Bitte gib eine URL ein.",
   "message.opensoundboard.binaries_missing": "yt-dlp/ffmpeg konnte nicht vorbereitet werden. Überprüfe deine Internetverbindung und die Ordnerberechtigungen.",
+  "message.opensoundboard.ffmpeg_missing": "Der Downloader braucht ffmpeg, das auf diesem System nicht automatisch heruntergeladen werden kann. Installiere es (unter macOS: brew install ffmpeg) und versuche es erneut.",
+  "message.opensoundboard.platform_unsupported": "Der Downloader ist für dieses System nicht verfügbar. Wenn du yt-dlp und deno selbst installierst, funktioniert er.",
   "message.opensoundboard.download_completed": "Download abgeschlossen.",
   "option.opensoundboard.uiWidth": "Fensterbreite",
   "tooltip.opensoundboard.uiWidth": "Breite der OpenSoundboard-Fenster.",

@@ -1,15 +1,10 @@
 package de.xcrafttm.opensoundboard.config;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import de.xcrafttm.opensoundboard.platform.PlatformBootstrap;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 
 @Data
@@ -33,8 +28,6 @@ public class SoundboardConfig {
      * Per-sound options
      */
     private static final File SOUNDS_FILE = new File(BASE_DIR, "sounds.json");
-
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static SoundboardConfig data;
 
@@ -89,31 +82,13 @@ public class SoundboardConfig {
         ensureConfigDir();
 
         // global
-        if (CONFIG_FILE.exists()) {
-            try (FileReader reader = new FileReader(CONFIG_FILE)) {
-                data = GSON.fromJson(reader, SoundboardConfig.class);
-                if (data == null) data = new SoundboardConfig();
-            } catch (IOException e) {
-                e.printStackTrace();
-                data = new SoundboardConfig();
-            }
-        } else {
-            data = new SoundboardConfig();
-        }
+        data = JsonFiles.read(CONFIG_FILE, SoundboardConfig.class, SoundboardConfig::new);
         data.normalizeAccessibility();
 
         // per-sound
-        if (SOUNDS_FILE.exists()) {
-            try (FileReader reader = new FileReader(SOUNDS_FILE)) {
-                SoundStore loaded = GSON.fromJson(reader, SoundStore.class);
-                soundStore = loaded != null ? loaded : new SoundStore();
-            } catch (IOException e) {
-                e.printStackTrace();
-                soundStore = new SoundStore();
-            }
-        } else {
-            soundStore = new SoundStore();
-        }
+        soundStore = JsonFiles.read(SOUNDS_FILE, SoundStore.class, SoundStore::new);
+        if (soundStore.getSounds() == null) soundStore.setSounds(new java.util.HashMap<>());
+        soundStore.getSounds().values().removeIf(java.util.Objects::isNull);
 
         // migration from old single-file storage: if we loaded 'sounds' directly into config
         if (data.sounds != null && !data.sounds.isEmpty()) {
@@ -181,18 +156,8 @@ public class SoundboardConfig {
 
         // global: do not serialize any embedded sounds map
         data.sounds = null;
-        try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
-            GSON.toJson(data, writer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        // sounds
-        try (FileWriter writer = new FileWriter(SOUNDS_FILE)) {
-            GSON.toJson(soundStore, writer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        JsonFiles.write(CONFIG_FILE, data);
+        JsonFiles.write(SOUNDS_FILE, soundStore);
     }
 
     /**
@@ -340,13 +305,38 @@ public class SoundboardConfig {
         }
     }
 
+    /**
+     * A per-sound keybind. Key codes differ between Minecraft versions (26.3 switched from GLFW to
+     * SDL), so binds are matched by {@link #key}, Minecraft's version-independent key name (the same
+     * one options.txt uses), and the {@link #ctrl}/{@link #shift}/{@link #alt} flags.
+     * {@code keyCode}/{@code scanCode}/{@code modifiers} hold the raw values of the version that
+     * saved the bind; binds from 0.5.1 and older only have those and are upgraded on startup.
+     */
     @Data
     @NoArgsConstructor
-    @AllArgsConstructor
     public static class KeyBind {
         int keyCode;
         int scanCode;
         int modifiers;
+        String key;
+        boolean ctrl;
+        boolean shift;
+        boolean alt;
+
+        public KeyBind(int keyCode, int scanCode, int modifiers, String key, boolean ctrl, boolean shift, boolean alt) {
+            this.keyCode = keyCode;
+            this.scanCode = scanCode;
+            this.modifiers = modifiers;
+            this.key = key;
+            this.ctrl = ctrl;
+            this.shift = shift;
+            this.alt = alt;
+        }
+
+        /** Whether this bind predates version-independent key names. */
+        public boolean isLegacy() {
+            return key == null || key.isBlank();
+        }
     }
 }
 

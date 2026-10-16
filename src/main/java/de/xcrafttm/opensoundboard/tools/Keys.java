@@ -1,6 +1,7 @@
 package de.xcrafttm.opensoundboard.tools;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import net.minecraft.client.Minecraft;
 
 /**
@@ -35,7 +36,71 @@ public final class Keys {
     public static final int MOD_ALT = 4;
     *///?}
 
+    // The Super/Windows key constant was renamed twice: KEY_LWIN -> KEY_LSUPER (1.21.2) -> KEY_LGUI (26.3, SDL).
+    //? if >=26.3 {
+    private static final int SUPER_LEFT = InputConstants.KEY_LGUI;
+    private static final int SUPER_RIGHT = InputConstants.KEY_RGUI;
+    //?} else if >=1.21.11 {
+    /*private static final int SUPER_LEFT = InputConstants.KEY_LSUPER;
+    private static final int SUPER_RIGHT = InputConstants.KEY_RSUPER;
+    *///?} else {
+    /*private static final int SUPER_LEFT = InputConstants.KEY_LWIN;
+    private static final int SUPER_RIGHT = InputConstants.KEY_RWIN;
+    *///?}
+
     private Keys() {
+    }
+
+    /** Shift, Ctrl, Alt, and Super keys: only ever the modifiers of a sound keybind, not its key. */
+    public static boolean isModifierKey(int key) {
+        return key == InputConstants.KEY_LSHIFT || key == InputConstants.KEY_RSHIFT
+                || key == InputConstants.KEY_LCONTROL || key == InputConstants.KEY_RCONTROL
+                || key == InputConstants.KEY_LALT || key == InputConstants.KEY_RALT
+                || key == SUPER_LEFT || key == SUPER_RIGHT;
+    }
+
+    /** A sound keybind for {@code key} with the modifiers in {@code mods}, stored by version-independent key name. */
+    public static SoundboardConfig.KeyBind keyBind(int key, int scan, int mods) {
+        String name = keyboardType().getOrCreate(key).getName();
+        return new SoundboardConfig.KeyBind(key, scan, mods, name,
+                (mods & MOD_CONTROL) != 0, (mods & MOD_SHIFT) != 0, (mods & MOD_ALT) != 0);
+    }
+
+    /**
+     * The keybind for a key the user just pressed. Modifiers count when the event reports them or
+     * the key state shows them held, which is what keybinds are matched against later.
+     */
+    public static SoundboardConfig.KeyBind pressedKeyBind(int key, int scan, int mods) {
+        if (controlDown()) mods |= MOD_CONTROL;
+        if (shiftDown()) mods |= MOD_SHIFT;
+        if (altDown()) mods |= MOD_ALT;
+        return keyBind(key, scan, mods);
+    }
+
+    /** The key a stored sound keybind means on this Minecraft version ({@link InputConstants#UNKNOWN} if none). */
+    public static InputConstants.Key boundKey(SoundboardConfig.KeyBind bind) {
+        if (bind.isLegacy()) return keyboardType().getOrCreate(bind.getKeyCode());
+        try {
+            return InputConstants.getKey(bind.getKey());
+        } catch (RuntimeException e) {
+            return InputConstants.UNKNOWN;
+        }
+    }
+
+    /**
+     * Gives binds saved by 0.5.1 and older (raw key codes of the Minecraft version that was running)
+     * a version-independent key name, so they keep working after switching Minecraft versions.
+     * Returns whether anything changed.
+     */
+    public static boolean upgradeLegacyBinds() {
+        boolean changed = false;
+        for (SoundboardConfig.SoundData data : SoundboardConfig.sounds().values()) {
+            SoundboardConfig.KeyBind bind = data.getKeybind();
+            if (bind == null || !bind.isLegacy()) continue;
+            data.setKeybind(keyBind(bind.getKeyCode(), bind.getScanCode(), bind.getModifiers()));
+            changed = true;
+        }
+        return changed;
     }
 
     /** Input type for keyboard bindings ({@code KEYSYM} before 26.3, {@code KEYBOARD} after). */

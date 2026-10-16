@@ -8,7 +8,6 @@ import de.xcrafttm.opensoundboard.tools.McCompat;
 import de.xcrafttm.opensoundboard.tools.SoundLibrary;
 import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import de.xcrafttm.opensoundboard.tools.VoiceBackend;
-import de.xcrafttm.opensoundboard.tools.YtDlpManager;
 import de.xcrafttm.opensoundboard.ui.Icons;
 import de.xcrafttm.opensoundboard.ui.OsbScreen;
 import de.xcrafttm.opensoundboard.ui.Theme;
@@ -61,6 +60,15 @@ public class SoundboardScreen extends OsbScreen {
 
     private final List<File> results = new ArrayList<>();
 
+    /**
+     * Folder contents, read once per build instead of on every keystroke; null = not read yet.
+     * {@link #deepSounds} (every sound below the folder, for searches) is only read once needed.
+     */
+    private List<File> folders;
+    private List<Integer> folderCounts;
+    private List<File> dirSounds;
+    private List<File> deepSounds;
+
     public SoundboardScreen() {
         super(Component.translatable("gui.opensoundboard.title"));
     }
@@ -108,7 +116,9 @@ public class SoundboardScreen extends OsbScreen {
         int y = bodyY;
         int dirW = ctl;
         int modeW = vanilla ? 90 : 64;
+        String query = search != null ? search.getText() : "";
         search = add(new TextField().icon(Icons.SEARCH).placeholder(tip("gui.opensoundboard.search_hint")).onChange(s -> scanSounds()));
+        search.setText(query);
         search.bounds(bodyX, y, bodyW - modeW - dirW - gap * 2, ctl);
         sortModeBtn = add(new Button(sortModeLabel(), b -> cycleSortMode()).secondary());
         sortModeBtn.bounds(bodyX + bodyW - dirW - gap - modeW, y, modeW, ctl).tooltip(tip("tooltip.opensoundboard.sortMode"));
@@ -136,7 +146,10 @@ public class SoundboardScreen extends OsbScreen {
 
         buildDetails(ctl, gap, Math.max(lh, ctl));
 
+        folders = null;
+        deepSounds = null;
         scanSounds();
+        SoundboardAudioSystem.scanDurations();
         File active = SoundboardAudioSystem.getActiveSoundFile();
         if (selected == null && active != null && active.exists()) selected = active;
         refreshDetails();
@@ -190,8 +203,8 @@ public class SoundboardScreen extends OsbScreen {
         y += ctl + gap;
 
         timeline = detail(new Slider(0, v -> {
-            if (selected != null && SoundboardAudioSystem.isPlaying(selected.getName()))
-                SoundboardAudioSystem.setCursor(selected.getName(), v.floatValue());
+            if (selected != null && SoundboardAudioSystem.isPlaying(selectedKey()))
+                SoundboardAudioSystem.setCursor(selectedKey(), v.floatValue());
         }).readout(v -> timelineLabel()));
         timeline.bounds(bodyX, y, bodyW, ctl);
         y += ctl + gap;
@@ -199,10 +212,10 @@ public class SoundboardScreen extends OsbScreen {
         int timeW = vanilla() ? 64 : 58;
         timeField = detail(new TextField().maxLength(10).placeholder("0:00.0").onChange(t -> {
             if (selected == null || !timeField.isFocused()) return;
-            if (!SoundboardAudioSystem.isPlaying(selected.getName())) return;
+            if (!SoundboardAudioSystem.isPlaying(selectedKey())) return;
             long ms = GuiTools.parseTimeMillis(t);
-            long dur = SoundboardAudioSystem.getDurationMillis(selected.getName());
-            if (ms >= 0 && dur > 0) SoundboardAudioSystem.setCursor(selected.getName(), Math.max(0f, Math.min(1f, ms / (float) dur)));
+            long dur = SoundboardAudioSystem.getDurationMillis(selectedKey());
+            if (ms >= 0 && dur > 0) SoundboardAudioSystem.setCursor(selectedKey(), Math.max(0f, Math.min(1f, ms / (float) dur)));
         }));
         timeField.bounds(bodyX, y, timeW, ctl);
         timeField.tooltip(tip("tooltip.opensoundboard.time_field"));
@@ -248,22 +261,40 @@ public class SoundboardScreen extends OsbScreen {
         rebuildUi();
     }
 
+    private String selectedKey() {
+        return selected == null ? null : SoundLibrary.key(selected);
+    }
+
+    private File currentDir() {
+        return currentFolder != null ? currentFolder : SoundLibrary.root();
+    }
+
+    /** Re-filter the list. Reads the folder from disk only the first time after a (re)build. */
     private void scanSounds() {
         String query = search == null ? "" : search.getText().trim().toLowerCase();
         results.clear();
         list.clearRows();
 
         boolean subfolders = SoundboardConfig.data.isShowSubfolders();
-        File dir = currentFolder != null ? currentFolder : SoundLibrary.root();
+        File dir = currentDir();
+        if (folders == null) {
+            folders = subfolders ? SoundLibrary.folders(dir) : List.of();
+            folderCounts = folders.stream().map(SoundLibrary::countSounds).toList();
+            dirSounds = SoundLibrary.sounds(dir);
+        }
         boolean hasFolders = false;
-        if (subfolders && query.isEmpty()) {
-            for (File folder : SoundLibrary.folders(dir)) {
-                list.addRow(folderRow(folder));
+        if (query.isEmpty()) {
+            for (int i = 0; i < folders.size(); i++) {
+                list.addRow(folderRow(folders.get(i), folderCounts.get(i)));
                 hasFolders = true;
             }
         }
 
-        List<File> candidates = subfolders && !query.isEmpty() ? SoundLibrary.allSounds(dir) : SoundLibrary.sounds(dir);
+        List<File> candidates = dirSounds;
+        if (subfolders && !query.isEmpty()) {
+            if (deepSounds == null) deepSounds = SoundLibrary.allSounds(dir);
+            candidates = deepSounds;
+        }
         List<File> sorted = candidates.stream()
                 .filter(f -> f.getName().toLowerCase().contains(query))
                 .sorted(comparator())
@@ -278,12 +309,10 @@ public class SoundboardScreen extends OsbScreen {
         }
 
         list.emptyText(tip(query.isEmpty() ? "gui.opensoundboard.empty" : "gui.opensoundboard.no_results"));
-        SoundboardAudioSystem.scanDurations();
     }
 
-    private ScrollList.Row folderRow(File folder) {
+    private ScrollList.Row folderRow(File folder, int count) {
         final String name = folder.getName();
-        final int count = SoundLibrary.countSounds(folder);
         return new ScrollList.Row() {
             public int height() {
                 return SoundRows.rowHeight();
@@ -314,14 +343,14 @@ public class SoundboardScreen extends OsbScreen {
     }
 
     private ScrollList.Row soundRow(File file, String folderHint) {
-        final String name = file.getName();
+        final String key = SoundLibrary.key(file);
         return new ScrollList.Row() {
             public int height() {
                 return SoundRows.rowHeight();
             }
 
             public void draw(UiCanvas c, int rx, int ry, int rw, boolean hovered) {
-                boolean sel = selected != null && selected.getName().equals(name);
+                boolean sel = selected != null && key.equals(selectedKey());
                 SoundRows.drawSound(c, file, rx, ry, rw, height(), sel, hovered, true, folderHint);
             }
 
@@ -329,19 +358,19 @@ public class SoundboardScreen extends OsbScreen {
                 if (button != 0) return false;
                 if (SoundRows.inPlayZone(mx, rx)) {
                     select(file);
-                    togglePlay(file);
+                    SoundboardAudioSystem.toggle(file);
                 } else if (SoundRows.inStarZone(mx, rx)) {
-                    var data = SoundboardConfig.get(name);
+                    var data = SoundboardConfig.get(key);
                     data.setFavorite(!data.isFavorite());
                     SoundboardConfig.save();
                     scanSounds();
                 } else {
                     long now = System.currentTimeMillis();
-                    if (name.equals(lastClickedName) && now - lastClickTime < DOUBLE_CLICK_MS) {
-                        togglePlay(file);
+                    if (key.equals(lastClickedName) && now - lastClickTime < DOUBLE_CLICK_MS) {
+                        SoundboardAudioSystem.toggle(file);
                         lastClickedName = null;
                     } else {
-                        lastClickedName = name;
+                        lastClickedName = key;
                         lastClickTime = now;
                     }
                     select(file);
@@ -351,7 +380,7 @@ public class SoundboardScreen extends OsbScreen {
 
             public String tooltip(double mx, int rx, int rw) {
                 if (SoundRows.inPlayZone(mx, rx)) {
-                    return tip(SoundboardAudioSystem.isPlaying(name) ? "gui.opensoundboard.stop" : "gui.opensoundboard.play");
+                    return tip(SoundboardAudioSystem.isPlaying(key) ? "gui.opensoundboard.stop" : "gui.opensoundboard.play");
                 }
                 if (SoundRows.inStarZone(mx, rx)) return tip("gui.opensoundboard.favorite");
                 return null;
@@ -361,12 +390,16 @@ public class SoundboardScreen extends OsbScreen {
 
     private Comparator<File> comparator() {
         Comparator<File> base = switch (SoundboardConfig.data.getSortMode()) {
-            case "date" -> Comparator.comparingLong(File::lastModified);
-            case "length" -> Comparator.comparingLong(f -> Math.max(0, SoundboardAudioSystem.getDurationMillis(f.getName())));
+            case "date" -> {
+                // Each file's date is read from disk once per sort, not once per comparison.
+                java.util.Map<File, Long> dates = new java.util.HashMap<>();
+                yield Comparator.comparingLong(f -> dates.computeIfAbsent(f, File::lastModified));
+            }
+            case "length" -> Comparator.comparingLong(f -> Math.max(0, SoundboardAudioSystem.getDurationMillis(SoundLibrary.key(f))));
             default -> Comparator.comparing(f -> f.getName().toLowerCase());
         };
         if (!SoundboardConfig.data.isSortAscending()) base = base.reversed();
-        return Comparator.comparing((File f) -> SoundboardConfig.get(f.getName()).isFavorite()).reversed().thenComparing(base);
+        return Comparator.comparing((File f) -> SoundboardConfig.get(SoundLibrary.key(f)).isFavorite()).reversed().thenComparing(base);
     }
 
     // ---------------------------------------------------------------- selection / details
@@ -400,7 +433,7 @@ public class SoundboardScreen extends OsbScreen {
             bindBtn.setLabel(GuiTools.keyBindLabel(null));
             return;
         }
-        String key = selected.getName();
+        String key = selectedKey();
         var data = SoundboardConfig.get(key);
         if (!master) {
             localSlider.set(data.getLocalVolume());
@@ -441,7 +474,7 @@ public class SoundboardScreen extends OsbScreen {
         } else {
             String name = GuiTools.baseName(selected);
             int nameX = bodyX;
-            if (SoundboardAudioSystem.isPlaying(selected.getName())) {
+            if (SoundboardAudioSystem.isPlaying(selectedKey())) {
                 c.icon(Icons.NOTE, bodyX, detailsTop + (lineH - Icons.NOTE.height) / 2, vanilla ? 0xFFFFFF55 : Theme.accent);
                 nameX += Icons.NOTE.width + 5;
             }
@@ -476,7 +509,7 @@ public class SoundboardScreen extends OsbScreen {
             return;
         }
         if (selected == null) return;
-        var data = SoundboardConfig.get(selected.getName());
+        var data = SoundboardConfig.get(selectedKey());
         if (SoundboardConfig.data.isSyncAudio()) {
             data.setLocalVolume(f);
             data.setPlayerVolume(f);
@@ -485,20 +518,16 @@ public class SoundboardScreen extends OsbScreen {
         } else {
             data.setPlayerVolume(f);
         }
-        SoundboardAudioSystem.setVolume(selected.getName(), data.getLocalVolume(), data.getPlayerVolume());
-    }
-
-    private void togglePlay(File file) {
-        String key = file.getName();
-        if (SoundboardAudioSystem.isPlaying(key)) SoundboardAudioSystem.stop(key);
-        else SoundboardAudioSystem.playFile(file, SoundboardConfig.get(key).getLocalVolume(), SoundboardConfig.get(key).getPlayerVolume());
+        SoundboardAudioSystem.setVolume(selectedKey(), data.getLocalVolume(), data.getPlayerVolume());
     }
 
     private void togglePause() {
         if (selected == null) return;
-        String key = selected.getName();
+        String key = selectedKey();
         if (!SoundboardAudioSystem.isPlaying(key)) {
-            togglePlay(selected);
+            SoundboardAudioSystem.play(selected);
+        } else if (SoundboardAudioSystem.isLoading(key)) {
+            SoundboardAudioSystem.stop(key);
         } else if (SoundboardAudioSystem.isPaused(key)) {
             SoundboardAudioSystem.resume(key);
         } else {
@@ -507,7 +536,7 @@ public class SoundboardScreen extends OsbScreen {
     }
 
     private void skip(int dir) {
-        if (selected != null) SoundboardAudioSystem.skip(selected.getName(), dir * SoundboardConfig.data.getSkipAmountSeconds());
+        if (selected != null) SoundboardAudioSystem.skip(selectedKey(), dir * SoundboardConfig.data.getSkipAmountSeconds());
     }
 
     private void toggleLoop() {
@@ -518,8 +547,8 @@ public class SoundboardScreen extends OsbScreen {
 
     private void setStart() {
         if (selected == null) return;
-        var data = SoundboardConfig.get(selected.getName());
-        data.setStartingPoint(Math.max(0f, SoundboardAudioSystem.getProgress(selected.getName())));
+        var data = SoundboardConfig.get(selectedKey());
+        data.setStartingPoint(Math.max(0f, SoundboardAudioSystem.getProgress(selectedKey())));
         SoundboardConfig.save();
     }
 
@@ -532,7 +561,7 @@ public class SoundboardScreen extends OsbScreen {
 
     private Component timelineLabel() {
         if (selected == null) return Component.literal("0:00.0 / 0:00.0");
-        String key = selected.getName();
+        String key = selectedKey();
         long dur = SoundboardAudioSystem.getDurationMillis(key);
         long passed = SoundboardAudioSystem.isPlaying(key) ? SoundboardAudioSystem.getTimeMillis(key) : 0;
         if (dur > 0) {
@@ -574,21 +603,15 @@ public class SoundboardScreen extends OsbScreen {
         return Component.translatable(key).getString();
     }
 
+    /**
+     * Re-read the sounds folder: picks up added, removed, and moved files (settings follow a moved
+     * file when its name is unique) and re-measures every sound's length. Never touches the files.
+     */
     private void refresh() {
-        File[] all = OpenSoundboardClient.soundDir.listFiles((d, nm) -> nm.endsWith(".mp3"));
-        if (all != null) {
-            for (File file : all) {
-                String base = file.getName().substring(0, file.getName().length() - 4);
-                String sanitized = YtDlpManager.sanitizeTrackName(base);
-                if (sanitized.isBlank()) sanitized = "track";
-                String newName = sanitized + ".mp3";
-                if (newName.equals(file.getName())) continue;
-                File target = new File(OpenSoundboardClient.soundDir, newName);
-                for (int i = 2; target.exists(); i++) target = new File(OpenSoundboardClient.soundDir, sanitized + " (" + i + ").mp3");
-                if (file.renameTo(target)) SoundboardAudioSystem.scanFile(target);
-            }
-        }
-        scanSounds();
+        SoundLibrary.relinkMissing();
+        SoundboardAudioSystem.clearDurationCache();
+        if (selected != null && !selected.isFile()) selected = null;
+        rebuildUi();
     }
 
     private static int pct(double v) {
@@ -600,11 +623,13 @@ public class SoundboardScreen extends OsbScreen {
     @Override
     protected boolean screenKeyPressed(int key, int scan, int mods) {
         if (binding && selected != null) {
-            var data = SoundboardConfig.get(selected.getName());
+            // Shift/Ctrl/Alt alone are not a bind: wait for the key they are held with.
+            if (Keys.isModifierKey(key)) return true;
+            var data = SoundboardConfig.get(selectedKey());
             if (key == Keys.ESCAPE) {
                 data.setKeybind(null);
             } else {
-                data.setKeybind(new SoundboardConfig.KeyBind(key, scan, mods));
+                data.setKeybind(Keys.pressedKeyBind(key, scan, mods));
             }
             SoundboardConfig.save();
             binding = false;
@@ -616,20 +641,25 @@ public class SoundboardScreen extends OsbScreen {
             // Typing a search and pressing Enter plays the first match; otherwise Enter plays the selection.
             if (search != null && search.isFocused() && !search.getText().isBlank() && !results.isEmpty()) {
                 select(results.get(0));
-                togglePlay(results.get(0));
+                SoundboardAudioSystem.toggle(results.get(0));
                 return true;
             }
             if (selected != null) {
-                togglePlay(selected);
+                SoundboardAudioSystem.toggle(selected);
                 return true;
             }
             if (!results.isEmpty()) {
                 select(results.get(0));
-                togglePlay(results.get(0));
+                SoundboardAudioSystem.toggle(results.get(0));
                 return true;
             }
         }
         return false;
+    }
+
+    @Override
+    protected boolean acceptsTypedText() {
+        return true;
     }
 
     /** Typing while nothing is focused starts a search. */

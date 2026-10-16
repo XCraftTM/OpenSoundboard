@@ -29,7 +29,7 @@ import javax.sound.sampled.AudioFormat;
 public final class PlasmoVoiceBackend implements VoiceBackend {
 
     @InjectPlasmoVoice
-    private PlasmoVoiceClient voiceClient;
+    private volatile PlasmoVoiceClient voiceClient;
 
     private LoopbackSource loopback;
 
@@ -89,10 +89,12 @@ public final class PlasmoVoiceBackend implements VoiceBackend {
         if (frame == null) return;
 
         short[] player = frame.player();
-        for (int i = 0; i < frameSamples; i++) {
-            for (int ch = 0; ch < channels; ch++) {
-                int index = i * channels + ch;
-                samples[index] = (short) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, samples[index] + player[i]));
+        if (player != null) {
+            for (int i = 0; i < frameSamples; i++) {
+                for (int ch = 0; ch < channels; ch++) {
+                    int index = i * channels + ch;
+                    samples[index] = (short) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, samples[index] + player[i]));
+                }
             }
         }
 
@@ -101,8 +103,10 @@ public final class PlasmoVoiceBackend implements VoiceBackend {
 
     private void writeLocal(short[] local) {
         try {
+            PlasmoVoiceClient client = voiceClient;
+            if (client == null) return;
             if (loopback == null || loopback.isClosed()) {
-                loopback = voiceClient.getSourceManager().createLoopbackSource(true);
+                loopback = client.getSourceManager().createLoopbackSource(true);
                 loopback.initialize(false);
             }
             loopback.write(local);

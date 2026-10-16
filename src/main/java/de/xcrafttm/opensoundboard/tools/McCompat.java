@@ -40,6 +40,22 @@ public final class McCompat {
     }
 
     /**
+     * Enable or disable OS text input for {@code owner}. Minecraft 26.3 (SDL3) only delivers typed
+     * characters while text input is enabled. 26.1/26.2 (GLFW) always deliver characters but use
+     * the same switch for the input method (IME) that Chinese, Japanese, and Korean players type
+     * with. Older versions have neither, so this does nothing there.
+     */
+    public static void setTextInput(Object owner, boolean enabled) {
+        //? if >=26.3 {
+        var input = Minecraft.getInstance().textInputManager();
+        if (enabled) input.startTextInput(owner);
+        else input.stopTextInput(owner);
+        //?} else if >=26.1 {
+        /*Minecraft.getInstance().textInputManager().onTextInputFocusChange(enabled);
+        *///?}
+    }
+
+    /**
      * Open a folder in the OS file explorer. Util moved from net.minecraft.Util to
      * net.minecraft.util.Util in 1.21.2; 26.3 moved opening to Blaze3D.
      */

@@ -1,10 +1,12 @@
 package de.xcrafttm.opensoundboard.tools;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import net.minecraft.client.Minecraft;
 
 import java.io.File;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -18,68 +20,33 @@ public final class KeybindHandler {
     private KeybindHandler() {
     }
 
-    public static void tick(Minecraft client, File soundDir) {
+    public static void tick(Minecraft client) {
         if (McCompat.screen(client) != null || client.getWindow() == null) {
             heldKeybinds.clear();
             return;
         }
 
-        for (var entry : SoundboardConfig.sounds().entrySet()) {
+        for (Map.Entry<String, SoundboardConfig.SoundData> entry : SoundboardConfig.sounds().entrySet()) {
             SoundboardConfig.KeyBind keybind = entry.getValue().getKeybind();
             if (keybind == null) continue;
 
-            boolean keyDown = Keys.isKeyDown(keybind.getKeyCode());
-            boolean modsMatch = modifiersMatch(keybind.getModifiers());
-
+            InputConstants.Key key = Keys.boundKey(keybind);
             String name = entry.getKey();
-
-            if (keyDown && modsMatch) {
-                if (!heldKeybinds.contains(name)) {
-                    heldKeybinds.add(name);
-                    File file = SoundLibrary.find(name);
-                    if (file != null) {
-                        SoundboardConfig.SoundData data = entry.getValue();
-                        String mode = SoundboardConfig.data.getKeybindMode();
-                        boolean isPlaying = SoundboardAudioSystem.isPlaying(name);
-
-                        switch (mode) {
-                            case "pause_resume" -> {
-                                if (isPlaying) {
-                                    if (SoundboardAudioSystem.isPaused(name)) {
-                                        SoundboardAudioSystem.resume(name);
-                                    } else {
-                                        SoundboardAudioSystem.pause(name);
-                                    }
-                                } else {
-                                    SoundboardAudioSystem.playFile(file, data.getLocalVolume(), data.getPlayerVolume());
-                                }
-                            }
-                            case "play_restart" -> {
-                                if (isPlaying) {
-                                    SoundboardAudioSystem.stop(name);
-                                }
-                                SoundboardAudioSystem.playFile(file, data.getLocalVolume(), data.getPlayerVolume());
-                            }
-                            default -> { // "play_stop"
-                                if (isPlaying) {
-                                    SoundboardAudioSystem.stop(name);
-                                } else {
-                                    SoundboardAudioSystem.playFile(file, data.getLocalVolume(), data.getPlayerVolume());
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
+            if (key == InputConstants.UNKNOWN || !Keys.isDown(key) || !modifiersMatch(keybind)) {
                 heldKeybinds.remove(name);
+                continue;
             }
+            if (!heldKeybinds.add(name)) continue; // still held from the last press
+
+            File file = SoundLibrary.find(name);
+            if (file != null) SoundboardAudioSystem.trigger(file);
         }
     }
 
-    private static boolean modifiersMatch(int expected) {
-        boolean ctrlExpected = (expected & Keys.MOD_CONTROL) != 0;
-        boolean shiftExpected = (expected & Keys.MOD_SHIFT) != 0;
-        boolean altExpected = (expected & Keys.MOD_ALT) != 0;
-        return ctrlExpected == Keys.controlDown() && shiftExpected == Keys.shiftDown() && altExpected == Keys.altDown();
+    private static boolean modifiersMatch(SoundboardConfig.KeyBind bind) {
+        boolean ctrl = bind.isLegacy() ? (bind.getModifiers() & Keys.MOD_CONTROL) != 0 : bind.isCtrl();
+        boolean shift = bind.isLegacy() ? (bind.getModifiers() & Keys.MOD_SHIFT) != 0 : bind.isShift();
+        boolean alt = bind.isLegacy() ? (bind.getModifiers() & Keys.MOD_ALT) != 0 : bind.isAlt();
+        return ctrl == Keys.controlDown() && shift == Keys.shiftDown() && alt == Keys.altDown();
     }
 }

@@ -47,13 +47,13 @@ public final class YouTubeSearchManager {
             error = null;
             revision++;
         }
-        if (previous != null) previous.destroyForcibly();
+        YtDlpManager.destroyTree(previous);
 
         EXECUTOR.execute(() -> {
             YtDlpManager.SearchResponse response = YtDlpManager.search(text, RESULT_LIMIT, started -> {
                 synchronized (LOCK) {
                     if (generation == myGeneration) process = started;
-                    else started.destroyForcibly();
+                    else YtDlpManager.destroyTree(started);
                 }
             });
             synchronized (LOCK) {
