@@ -16,6 +16,10 @@ public class SoundboardConfig {
     public static final String DEFAULT_ACCENT_COLOR = "#5FAE6E";
     public static final String DEFAULT_SURFACE_TONE = "graphite";
     public static final float DEFAULT_PANEL_OPACITY = 0.96f;
+    /** Pitch modes: a random pitch inside a range per play, a fixed pitch per sound, or one for all. */
+    public static final String PITCH_RANDOM = "random";
+    public static final String PITCH_PER_SOUND = "per_sound";
+    public static final String PITCH_GLOBAL = "global";
     public static final float MIN_PITCH = 0.5f;
     public static final float MAX_PITCH = 2.0f;
     /** -3 and +3 semitones (the main screen's pitch range slider works in semitones). */
@@ -50,12 +54,14 @@ public class SoundboardConfig {
     boolean singleSongAtATime = true;
     boolean loopAll = false;
     boolean syncAudio = false;
-    // Random pitch: each play picks a speed/pitch between the two values (1.0 = unchanged). The
-    // controls only show on the main screen (and only apply) when randomPitchControls is on.
+    // Pitch controls: the main screen's pitch row only shows (and pitch only changes) when
+    // randomPitchControls is on. Pitch never changes the speed.
     boolean randomPitchControls = false;
-    /** Instead of a random range, each sound plays at its own fixed pitch (SoundData.pitch). */
-    boolean fixedPitchPerSound = false;
-    /** The main screen's pitch checkbox: pitch changes apply (random range, or fixed per sound). */
+    /** What the pitch row sets: {@link #PITCH_RANDOM}, {@link #PITCH_PER_SOUND} or {@link #PITCH_GLOBAL}. */
+    String pitchMode = PITCH_RANDOM;
+    /** Pitch in semitones (-12..+12) for every sound in {@link #PITCH_GLOBAL} mode. */
+    float fixedPitch = 0f;
+    /** The main screen's pitch checkbox: whether pitch changes apply at all. */
     boolean randomPitch = false;
     float randomPitchMin = DEFAULT_RANDOM_PITCH_MIN;
     float randomPitchMax = DEFAULT_RANDOM_PITCH_MAX;
@@ -123,13 +129,13 @@ public class SoundboardConfig {
     }
 
     /** Whether pitch changes apply: the feature is enabled in the settings and ticked on the main screen. */
-    public boolean isRandomPitchActive() {
+    public boolean isPitchActive() {
         return randomPitchControls && randomPitch;
     }
 
-    /** Whether each sound plays at its own fixed pitch instead of a random one. */
+    /** Whether sounds play at a fixed pitch (per sound or one for all) instead of a random one. */
     public boolean isFixedPitchActive() {
-        return isRandomPitchActive() && fixedPitchPerSound;
+        return isPitchActive() && !PITCH_RANDOM.equals(pitchMode);
     }
 
     private void normalizeAccessibility() {
@@ -139,6 +145,9 @@ public class SoundboardConfig {
         panelOpacity = normalizeScale(panelOpacity, DEFAULT_PANEL_OPACITY, 0.6f, 1.0f);
         randomPitchMin = normalizeScale(randomPitchMin, DEFAULT_RANDOM_PITCH_MIN, MIN_PITCH, MAX_PITCH);
         randomPitchMax = normalizeScale(randomPitchMax, DEFAULT_RANDOM_PITCH_MAX, MIN_PITCH, MAX_PITCH);
+        if (!PITCH_PER_SOUND.equals(pitchMode) && !PITCH_GLOBAL.equals(pitchMode)) pitchMode = PITCH_RANDOM;
+        if (!Float.isFinite(fixedPitch)) fixedPitch = 0f;
+        fixedPitch = Math.max(-12f, Math.min(12f, fixedPitch));
         if (parseHexColor(accentColor) < 0) accentColor = DEFAULT_ACCENT_COLOR;
         if (surfaceTone == null || surfaceTone.isBlank()) surfaceTone = DEFAULT_SURFACE_TONE;
     }

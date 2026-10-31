@@ -2,6 +2,7 @@ package de.xcrafttm.opensoundboard.tools;
 
 import de.xcrafttm.opensoundboard.OpenSoundboardClient;
 import de.xcrafttm.opensoundboard.audio.Mp3Duration;
+import de.xcrafttm.opensoundboard.audio.PitchShift;
 import de.xcrafttm.opensoundboard.config.SoundboardConfig;
 import fr.delthas.javamp3.Sound;
 import net.minecraft.client.Minecraft;
@@ -538,7 +539,10 @@ public final class SoundboardAudioSystem {
                 return;
             }
             durationCache.putIfAbsent(key, (long) pcmData.length);
-            PlayingSound sound = new PlayingSound(id, file, pcmData, localVol, playerVol, previewOnly, previewOnly ? 1.0 : pitchFor(key));
+            double pitch = previewOnly ? 1.0 : pitchFor(key);
+            // Pitch shifting takes ~0.2 s per minute of audio, done here before the sound starts.
+            short[] playing = pitch == 1.0 ? pcmData : PitchShift.shift(pcmData, pitch);
+            PlayingSound sound = new PlayingSound(id, file, pcmData, playing, localVol, playerVol, previewOnly, pitch);
             if (startProgress >= 0f) {
                 sound.setCursor(startProgress);
             } else {
@@ -563,8 +567,9 @@ public final class SoundboardAudioSystem {
      */
     private static double pitchFor(String key) {
         SoundboardConfig cfg = SoundboardConfig.data;
-        if (cfg == null || !cfg.isRandomPitchActive()) return 1.0;
-        if (cfg.isFixedPitchActive()) return semitonesToPitch(SoundboardConfig.get(key).getPitch());
+        if (cfg == null || !cfg.isPitchActive()) return 1.0;
+        if (SoundboardConfig.PITCH_PER_SOUND.equals(cfg.getPitchMode())) return semitonesToPitch(SoundboardConfig.get(key).getPitch());
+        if (SoundboardConfig.PITCH_GLOBAL.equals(cfg.getPitchMode())) return semitonesToPitch(cfg.getFixedPitch());
         double low = Math.min(cfg.getRandomPitchMin(), cfg.getRandomPitchMax());
         double high = Math.max(cfg.getRandomPitchMin(), cfg.getRandomPitchMax());
         return high > low ? java.util.concurrent.ThreadLocalRandom.current().nextDouble(low, high) : low;
@@ -575,11 +580,47 @@ public final class SoundboardAudioSystem {
         return Math.pow(2, Math.max(-12, Math.min(12, semitones)) / 12.0);
     }
 
-    /** Change the pitch of {@code key} while it plays (fixed pitch per sound); previews keep theirs. */
+    /**
+     * Re-apply the pitch settings to everything playing (previews excluded): normal pitch when
+     * pitch is switched off, each sound's own pitch in fixed mode, or a new random pitch.
+     */
+    public static void refreshPitches() {
+        for (PlayingSound s : activeSounds) {
+            if (!s.previewOnly) retune(s, pitchFor(s.key));
+        }
+    }
+
+    /** Change the pitch of {@code key} while it plays (fixed pitch); previews keep theirs. */
     public static void setPitch(String key, double pitch) {
         for (PlayingSound s : activeSounds) {
-            if (s.key.equals(key) && !s.previewOnly) s.pitch = pitch;
+            if (s.key.equals(key) && !s.previewOnly) retune(s, pitch);
         }
+    }
+
+    /** Pitch shifting for sounds that are already playing; one at a time, newest request wins. */
+    private static final ExecutorService pitchExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "opensoundboard-pitch");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * Switch a playing sound to {@code pitch}. Back to normal is instant; a new pitch is computed in
+     * the background and swapped in at the same position (both versions have the same length).
+     * While a slider is dragged, requests that are already outdated when their turn comes are skipped.
+     */
+    private static void retune(PlayingSound sound, double pitch) {
+        if (sound.pitch == pitch) return;
+        sound.pitch = pitch;
+        if (pitch == 1.0) {
+            sound.samples = sound.original;
+            return;
+        }
+        pitchExecutor.submit(() -> {
+            if (sound.pitch != pitch) return; // a newer pitch was requested meanwhile
+            short[] shifted = PitchShift.shift(sound.original, pitch);
+            if (sound.pitch == pitch) sound.samples = shifted;
+        });
     }
 
     /** The pitch {@code key} is playing at (1 = normal), or 1 if it is not playing. */
@@ -716,22 +757,25 @@ public final class SoundboardAudioSystem {
         final String key;
         final File file;
         final boolean previewOnly;
-        private final short[] samples;
-        /** Playback rate: 1 = normal, 1.5 = 50 % faster and higher, like Minecraft's sound pitch. */
+        /** The decoded sound at its normal pitch. */
+        final short[] original;
+        /** What is played: {@link #original}, or a pitch-shifted copy of exactly the same length. */
+        private volatile short[] samples;
+        /** Wanted pitch multiplier (1 = normal, 2 = an octave up); the speed stays the same. */
         volatile double pitch;
 
         volatile float localVolume;
         volatile float playerVolume;
 
-        /** Read position in source samples; fractional when the pitch is not 1. */
-        private volatile double cursor = 0;
+        private volatile int cursor = 0;
         volatile boolean isPaused = false;
         volatile boolean isLooping = false;
 
-        private PlayingSound(String key, File file, short[] samples, float localVolume, float playerVolume,
-                             boolean previewOnly, double pitch) {
+        private PlayingSound(String key, File file, short[] original, short[] samples, float localVolume,
+                             float playerVolume, boolean previewOnly, double pitch) {
             this.key = key;
             this.file = file;
+            this.original = original;
             this.samples = samples;
             this.localVolume = localVolume;
             this.playerVolume = playerVolume;
@@ -745,48 +789,38 @@ public final class SoundboardAudioSystem {
 
         /** How many output samples are left (all of {@code frame} while looping). */
         int remaining(int frame) {
-            if (isLooping) return frame;
-            return (int) Math.max(0, Math.ceil((samples.length - cursor) / pitch));
+            return isLooping ? frame : Math.max(0, original.length - cursor);
         }
 
         float progress() {
-            return samples.length == 0 ? 0f : (float) (cursor / samples.length);
+            return original.length == 0 ? 0f : (float) cursor / original.length;
         }
 
         long timeMillis() {
-            return (long) (cursor * 1000L / SAMPLE_RATE);
+            return (long) cursor * 1000L / SAMPLE_RATE;
         }
 
         long durationMillis() {
-            return (long) samples.length * 1000L / SAMPLE_RATE;
+            return (long) original.length * 1000L / SAMPLE_RATE;
         }
 
         void setCursor(float progress) {
-            cursor = Math.max(0, Math.min(samples.length, (double) progress * samples.length));
+            cursor = Math.max(0, Math.min(original.length, (int) (progress * original.length)));
         }
 
         void skip(int seconds) {
-            cursor = Math.max(0, Math.min(samples.length, cursor + (double) seconds * SAMPLE_RATE));
+            cursor = Math.max(0, Math.min(original.length, cursor + seconds * SAMPLE_RATE));
         }
 
         short readNext() {
-            double c = cursor;
-            if (c >= samples.length) {
+            short[] s = samples;
+            int c = cursor;
+            if (c >= s.length) {
                 if (!isLooping) return 0;
-                c %= samples.length;
+                c = 0;
             }
-            int index = (int) c;
-            double frac = c - index;
-            short value;
-            if (frac == 0) {
-                value = samples[index];
-            } else {
-                // Linear interpolation between neighbouring samples keeps pitched sounds smooth.
-                int next = index + 1 < samples.length ? index + 1 : (isLooping ? 0 : index);
-                value = (short) Math.round(samples[index] * (1 - frac) + samples[next] * frac);
-            }
-            cursor = c + pitch;
-            return value;
+            cursor = c + 1;
+            return s[c];
         }
     }
 }

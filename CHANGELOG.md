@@ -1,11 +1,16 @@
 ## OpenSoundboard 0.6.1
 
-Adds pitch controls: a random pitch for every play, or a fixed pitch per sound.
+Adds pitch controls: give your sounds a random pitch, a pitch of their own, or one pitch for all.
 
 ### New
 
-- **Random pitch**: turn on Settings → Audio → Random pitch controls (off by default) to get a pitch row on the main screen. Tick its checkbox, and every sound plays at a random pitch inside the range you drag out on the slider: the left handle sets the lowest pitch, the right handle the highest, and the middle mark is the normal pitch. The range goes from one octave down (−12) to one octave up (+12) in semitones. Higher pitch also plays faster, like Minecraft's own sounds.
-- **Fixed pitch per sound**: with Settings → Audio → Fixed pitch per sound (right below), the main screen shows one pitch slider instead of the range. Select a sound and set its pitch (−12 to +12); it always plays at that pitch, and you can change it while it plays.
+- **Pitch controls**: turn on Settings → Audio → Pitch controls (off by default) to get a pitch row on the main screen: a checkbox to turn pitch on and off, and a slider from one octave down (−12) to one octave up (+12) in semitones, with the normal pitch marked in the middle.
+- **Pitch mode**, right below it, picks what the slider does:
+  - **Random range**: every play gets a random pitch inside the range you drag out between the two handles.
+  - **Per sound**: select a sound and set its own pitch; it always plays at that pitch.
+  - **Same for all**: one pitch for every sound.
+- Only the pitch changes: sounds keep their speed and length, and bass stays clean.
+- Changing the pitch, or unticking the checkbox, also changes sounds that are already playing.
 - While a sound plays at a changed pitch, the main screen shows it next to the sound's name.
 - Previews in the Sound Wheel editor always play at the normal pitch.
 

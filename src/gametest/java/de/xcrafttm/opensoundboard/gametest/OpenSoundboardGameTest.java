@@ -204,15 +204,16 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
             for (var w : children) if (w instanceof Toggle t) last = t;
             return last;
         });
-        int togglesBefore = ctx.computeOnClient(c -> countToggles(McCompat.screen(c)));
+        int choicesBefore = ctx.computeOnClient(c -> countPanel(McCompat.screen(c), Choice.class));
         Ui.click(ctx, setting);
         ctx.waitTicks(2);
         report.check("The setting turns the random pitch controls on", ctx.computeOnClient(c -> SoundboardConfig.data.isRandomPitchControls()));
-        int togglesAfter = ctx.computeOnClient(c -> countToggles(McCompat.screen(c)));
-        report.check("...and shows the \"Fixed pitch per sound\" option below it", togglesAfter == togglesBefore + 1, togglesBefore + " -> " + togglesAfter);
+        int choicesAfter = ctx.computeOnClient(c -> countPanel(McCompat.screen(c), Choice.class));
+        report.check("...and shows the \"Pitch mode\" choice below it", choicesAfter == choicesBefore + 1, choicesBefore + " -> " + choicesAfter);
         ctx.runOnClient(c -> Ui.setField(Ui.field(McCompat.screen(c), "panel"), "scroll", 10_000));
         ctx.waitTicks(2);
         report.screenshot("Settings - Audio with pitch controls");
+        checkDescriptionsFit(ctx, report, "pitch controls on");
 
         ctx.runOnClient(c -> {
             SoundboardConfig.data.setRandomPitch(false);
@@ -265,8 +266,12 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
         report.check("Each play picks a pitch between the two values (even when set lowest > highest)", inRange, seen.toString().trim());
 
         // A sound at 1.5x really advances 1.5x as fast as real time; one at 1x advances at 1x.
-        double fast = playbackSpeed(ctx, 1.5f);
-        report.check("At 1.50x the sound plays 1.5 times as fast", fast > 1.3 && fast < 1.7, String.format(java.util.Locale.ROOT, "%.2fx", fast));
+        // Pitch changes only the pitch: a sound at +7 (1.5x) still plays at normal speed.
+        double pitchedSpeed = playbackSpeed(ctx, 1.5f);
+        double pitchNow = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
+        report.check("A sound at a higher pitch is really pitched", Math.abs(pitchNow - 1.5) < 1e-6, pitchNow);
+        report.check("...but keeps its normal speed", pitchedSpeed > 0.85 && pitchedSpeed < 1.15,
+                String.format(java.util.Locale.ROOT, "%.2fx", pitchedSpeed));
         openSoundboard(ctx);
         ctx.runOnClient(c -> Ui.call(soundboard(c), "select", SoundLibrary.find(LONG_SONG)));
         ctx.waitTicks(3);
@@ -310,18 +315,18 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
         });
     }
 
-    /** "Fixed pitch per sound": one slider for the selected sound's own pitch. */
+    /** Pitch mode "per sound": one slider for the selected sound's own pitch. */
     private static void fixedPitch(ClientGameTestContext ctx, Report report) {
         ctx.runOnClient(c -> {
             SoundboardAudioSystem.stopAll();
             SoundboardConfig.data.setRandomPitchControls(true);
-            SoundboardConfig.data.setFixedPitchPerSound(true);
+            SoundboardConfig.data.setPitchMode(SoundboardConfig.PITCH_PER_SOUND);
             SoundboardConfig.data.setRandomPitch(true);
         });
         openSoundboard(ctx);
         de.xcrafttm.opensoundboard.ui.widgets.Slider slider = ctx.computeOnClient(c ->
                 (de.xcrafttm.opensoundboard.ui.widgets.Slider) Ui.field(soundboard(c), "pitchSlider"));
-        report.check("Fixed pitch mode shows one pitch slider instead of the range",
+        report.check("\"Per sound\" mode shows one pitch slider instead of the range",
                 slider != null && ctx.computeOnClient(c -> Ui.field(soundboard(c), "pitchRange") == null));
         report.check("...which is grayed out until a sound is selected", !ctx.computeOnClient(c -> slider.active));
 
@@ -337,6 +342,7 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
         Ui.waitUntil(ctx, 200, c -> !loading(LONG_SONG) && playing(LONG_SONG));
         double playing = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
         report.check("The sound plays at its own pitch (+12 = 2x)", Math.abs(playing - 2.0) < 1e-6, playing);
+        report.check("...with the pitch-shifted audio in place", ctx.computeOnClient(c -> pitchedAudioPlaying(LONG_SONG)));
         ctx.waitTicks(3);
         report.screenshot("Main screen - fixed pitch +12");
 
@@ -344,6 +350,21 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
         Ui.click(ctx, slider.x + 1 + 0.5 * (slider.w - 2), slider.y + slider.h / 2.0);
         double live = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
         report.check("Moving the slider retunes the playing sound immediately", Math.abs(live - 1.0) < 1e-6, live);
+        report.check("...back to the original audio", !ctx.computeOnClient(c -> pitchedAudioPlaying(LONG_SONG)));
+
+        // Unticking the checkbox returns a playing sound to normal at once; ticking re-applies it.
+        Ui.click(ctx, slider.x + slider.w - 1, slider.y + slider.h / 2.0); // back to +12
+        Toggle box = ctx.computeOnClient(c -> (Toggle) Ui.field(soundboard(c), "pitchToggle"));
+        Ui.click(ctx, box);
+        double unticked = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
+        report.check("Unticking the checkbox puts the playing sound back to normal pitch", unticked == 1.0, unticked);
+        report.check("...and disables the pitch slider", !ctx.computeOnClient(c -> slider.active));
+        report.screenshot("Main screen - pitch unticked");
+        Ui.click(ctx, box);
+        double ticked = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
+        report.check("Ticking it again re-applies the sound's pitch", Math.abs(ticked - 2.0) < 1e-6, ticked);
+        report.check("...and the re-pitched audio is swapped in while it plays",
+                Ui.waitUntil(ctx, 100, c -> pitchedAudioPlaying(LONG_SONG)));
 
         ctx.runOnClient(c -> SoundboardAudioSystem.play(SoundLibrary.find(APPLAUSE)));
         Ui.waitUntil(ctx, 200, c -> !loading(APPLAUSE) && playing(APPLAUSE));
@@ -353,17 +374,117 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
         ctx.runOnClient(c -> {
             SoundboardAudioSystem.stopAll();
             SoundboardConfig.get(LONG_SONG).setPitch(0f);
-            SoundboardConfig.data.setFixedPitchPerSound(false);
+        });
+        sameForAll(ctx, report);
+    }
+
+    /** Pitch mode "same for all": one slider, no selection needed, applies to every sound. */
+    private static void sameForAll(ClientGameTestContext ctx, Report report) {
+        ctx.runOnClient(c -> {
+            SoundboardConfig.data.setPitchMode(SoundboardConfig.PITCH_GLOBAL);
+            SoundboardConfig.data.setFixedPitch(0f);
+        });
+        openSoundboard(ctx);
+        de.xcrafttm.opensoundboard.ui.widgets.Slider slider = ctx.computeOnClient(c ->
+                (de.xcrafttm.opensoundboard.ui.widgets.Slider) Ui.field(soundboard(c), "pitchSlider"));
+        report.check("\"Same for all\" mode shows one pitch slider", slider != null);
+        report.check("...usable without selecting a sound", ctx.computeOnClient(c -> slider.active && Ui.field(soundboard(c), "selected") == null));
+
+        Ui.click(ctx, slider.x + slider.w - 1, slider.y + slider.h / 2.0); // +12
+        float global = ctx.computeOnClient(c -> SoundboardConfig.data.getFixedPitch());
+        report.check("Clicking the right end sets the pitch for all sounds to +12", global == 12f, global);
+        for (String key : List.of(APPLAUSE, AIRHORN)) {
+            ctx.runOnClient(c -> SoundboardAudioSystem.play(SoundLibrary.find(key)));
+            Ui.waitUntil(ctx, 200, c -> !loading(key) && playing(key));
+            double p = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(key));
+            report.check(key + " plays at the shared pitch (2x)", Math.abs(p - 2.0) < 1e-6, p);
+        }
+        ctx.waitTicks(3);
+        report.screenshot("Main screen - same pitch for all +12");
+
+        ctx.runOnClient(c -> {
+            SoundboardAudioSystem.stopAll();
+            SoundboardConfig.data.setFixedPitch(0f);
+            SoundboardConfig.data.setPitchMode(SoundboardConfig.PITCH_RANDOM);
         });
     }
 
-    private static int countToggles(Object configScreen) {
+    // ---------------------------------------------------------------- settings descriptions
+
+    private static final String[] LANGUAGES = {"en_us", "de_de"};
+
+    /** All four settings pages: each setting's description must fit its row, in every language. */
+    private static void checkDescriptionsFit(ClientGameTestContext ctx, Report report, String where) {
+        List<String> clipped = new java.util.ArrayList<>();
+        for (int page = 0; page < 4; page++) {
+            int p = page;
+            ctx.runOnClient(c -> Ui.call(McCompat.screen(c), "switchPage", p));
+            ctx.waitTicks(2);
+            clipped.addAll(ctx.computeOnClient(OpenSoundboardGameTest::clippedDescriptions));
+        }
+        report.check("Every setting's description fits (English and German, " + where + ")", clipped.isEmpty(), clipped);
+    }
+
+    /**
+     * Descriptions on the open settings page that need more lines than a row shows. Rows only
+     * carry the (English) text, so it is matched back to its key to measure the other languages
+     * at the same width.
+     */
+    private static List<String> clippedDescriptions(Minecraft c) {
+        Object panel = Ui.field(McCompat.screen(c), "panel");
+        java.util.Map<String, java.util.Map<String, String>> langs = new java.util.HashMap<>();
+        for (String lang : LANGUAGES) langs.put(lang, loadLanguage(lang));
+        java.util.Map<String, String> keyByEnglish = new java.util.HashMap<>();
+        langs.get("en_us").forEach((k, v) -> { if (k.startsWith("tooltip.opensoundboard.")) keyByEnglish.put(v, k); });
+
+        List<String> clipped = new java.util.ArrayList<>();
+        @SuppressWarnings("unchecked")
+        List<de.xcrafttm.opensoundboard.ui.Widget> children = (List<de.xcrafttm.opensoundboard.ui.Widget>) Ui.field(panel, "children");
+        for (var w : children) {
+            if (!(w instanceof de.xcrafttm.opensoundboard.ui.widgets.OptionRow row)) continue;
+            String shown = (String) Ui.field(row, "description");
+            if (shown == null || shown.isBlank()) continue;
+            int width = de.xcrafttm.opensoundboard.ui.widgets.OptionRow.textWidth(row.w, (int) Ui.field(row, "controlWidth"));
+            String key = keyByEnglish.get(shown);
+            for (String lang : LANGUAGES) {
+                String text = key == null ? (lang.equals("en_us") ? shown : null) : langs.get(lang).get(key);
+                if (text == null) continue;
+                int lines = de.xcrafttm.opensoundboard.ui.TextWrap.wrap(c.font, text, width, 0).size();
+                if (lines > de.xcrafttm.opensoundboard.ui.widgets.OptionRow.MAX_DESCRIPTION_LINES) {
+                    clipped.add(lang + " " + (key != null ? key : shown) + " (" + lines + " lines)");
+                }
+            }
+        }
+        return clipped;
+    }
+
+    private static java.util.Map<String, String> loadLanguage(String lang) {
+        try (var in = OpenSoundboardGameTest.class.getResourceAsStream("/assets/opensoundboard/lang/" + lang + ".json")) {
+            if (in == null) throw new IllegalStateException("missing " + lang);
+            var reader = new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8);
+            java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<java.util.Map<String, String>>() { }.getType();
+            return new com.google.gson.Gson().fromJson(reader, type);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static int countPanel(Object configScreen, Class<?> type) {
         @SuppressWarnings("unchecked")
         List<de.xcrafttm.opensoundboard.ui.Widget> children =
                 (List<de.xcrafttm.opensoundboard.ui.Widget>) Ui.field(Ui.field(configScreen, "panel"), "children");
         int count = 0;
-        for (var w : children) if (w instanceof Toggle) count++;
+        for (var w : children) if (type.isInstance(w)) count++;
         return count;
+    }
+
+    /** Whether the pitched audio for {@code key} is in place (not just requested). */
+    private static boolean pitchedAudioPlaying(String key) {
+        Collection<?> sounds = (Collection<?>) Ui.field(SoundboardAudioSystem.class, "activeSounds");
+        for (Object sound : sounds) {
+            if (key.equals(Ui.field(sound, "key"))) return Ui.field(sound, "samples") != Ui.field(sound, "original");
+        }
+        return false;
     }
 
     /** Plays Long Song at a fixed pitch and measures how fast its position moves against the wall clock. */
@@ -455,6 +576,7 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
             ctx.waitTicks(2);
             report.screenshot("Settings - " + pages[i]);
         }
+        checkDescriptionsFit(ctx, report, "large window"); // ends on the Appearance page
 
         // The accent color field sits inside a scrolling panel: typing must reach it too.
         TextField hex = ctx.computeOnClient(c -> (TextField) Ui.field(McCompat.screen(c), "hexField"));
@@ -633,6 +755,22 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
     /** Minecraft's default window (854x480, automatic GUI scale): records how much of the list fits. */
     private static void smallWindow(ClientGameTestContext ctx, Report report) {
         Ui.setWindow(ctx, 854, 480, 0);
+
+        // Narrowest settings rows: every description (with the pitch rows shown) still fits.
+        ctx.runOnClient(c -> {
+            SoundboardConfig.data.setVanillaComponents(false);
+            SoundboardConfig.data.setRandomPitchControls(true);
+        });
+        ctx.setScreen(() -> new SoundboardConfigScreen(null));
+        ctx.waitTicks(2);
+        checkDescriptionsFit(ctx, report, "small window");
+        ctx.runOnClient(c -> Ui.call(McCompat.screen(c), "switchPage", 1));
+        ctx.waitTicks(2);
+        ctx.runOnClient(c -> Ui.setField(Ui.field(McCompat.screen(c), "panel"), "scroll", 10_000));
+        ctx.waitTicks(2);
+        report.screenshot("Small window - settings Audio");
+        ctx.runOnClient(c -> SoundboardConfig.data.setRandomPitchControls(false));
+
         for (boolean vanilla : new boolean[]{false, true}) {
             ctx.runOnClient(c -> SoundboardConfig.data.setVanillaComponents(vanilla));
             openSoundboard(ctx);

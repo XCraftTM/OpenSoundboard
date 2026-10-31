@@ -74,8 +74,10 @@ public class Slider extends Widget {
             if (mark >= 0) {
                 c.fillRect(x + VANILLA_HANDLE_W / 2 + (int) Math.round(mark * (w - VANILLA_HANDLE_W)), y + 2, 1, h - 4, 0x80FFFFFF);
             }
-            int hx = x + (int) Math.round(value * (w - VANILLA_HANDLE_W));
-            c.sprite(hover ? "widget/slider_handle_highlighted" : "widget/slider_handle", hx, y, VANILLA_HANDLE_W, h);
+            if (active) { // like the modern style, a disabled slider shows no handle
+                int hx = x + (int) Math.round(value * (w - VANILLA_HANDLE_W));
+                c.sprite(hover ? "widget/slider_handle_highlighted" : "widget/slider_handle", hx, y, VANILLA_HANDLE_W, h);
+            }
             if (readout != null) {
                 c.fitText(readout.apply(value).getString(), x + 4, c.centeredTextY(y, h), w - 8,
                         active ? UiStyle.VANILLA_TEXT : UiStyle.VANILLA_TEXT_DISABLED);

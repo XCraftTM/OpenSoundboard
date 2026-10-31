@@ -264,25 +264,33 @@ public class SoundboardScreen extends OsbScreen {
     /** The range slider covers one octave down to one octave up (pitch 0.5x to 2x). */
     private static final int PITCH_SEMITONES = 12;
 
+    private static String pitchMode() {
+        return SoundboardConfig.data.getPitchMode();
+    }
+
+    private static boolean perSoundPitch() {
+        return SoundboardConfig.PITCH_PER_SOUND.equals(pitchMode());
+    }
+
     /**
-     * Checkbox + pitch slider at {@code y}; returns the y below the row. The slider is a random
-     * range, or with "fixed pitch per sound" a single pitch for the selected sound.
+     * Checkbox + pitch slider at {@code y}; returns the y below the row. Depending on the pitch
+     * mode, the slider is a random range, the selected sound's own pitch, or one pitch for all.
      */
     private int buildPitchRow(int y, int ctl, int gap) {
-        boolean fixed = SoundboardConfig.data.isFixedPitchPerSound();
+        String mode = pitchMode();
         int boxSize = vanilla() ? ctl : 12;
         pitchToggle = detail(new Toggle(SoundboardConfig.data.isRandomPitch(), this::setRandomPitch));
         pitchToggle.bounds(bodyX, y + (ctl - boxSize) / 2, boxSize, boxSize);
-        pitchToggle.tooltip(tip(fixed ? "tooltip.opensoundboard.fixed_pitch" : "tooltip.opensoundboard.random_pitch"));
+        pitchToggle.tooltip(tip("tooltip.opensoundboard.pitch_toggle." + mode));
         int rangeX = bodyX + boxSize + gap + 2;
-        if (fixed) {
+        if (!SoundboardConfig.PITCH_RANDOM.equals(mode)) {
             pitchSlider = detail(new Slider(0.5, v -> onFixedPitch(fromSlider(v)))
                     .steps(PITCH_SEMITONES * 2)
                     .mark(0.5)
                     .readout(v -> Component.translatable("gui.opensoundboard.pitch_fixed", signed(fromSlider(v))))
                     .onCommit(v -> SoundboardConfig.save()));
             pitchSlider.bounds(rangeX, y, bodyX + bodyW - rangeX, ctl);
-            pitchSlider.tooltip(tip("tooltip.opensoundboard.pitch_fixed"));
+            pitchSlider.tooltip(tip("tooltip.opensoundboard.pitch_slider." + mode));
             return y + ctl + gap;
         }
         pitchRange = detail(new RangeSlider(
@@ -297,23 +305,32 @@ public class SoundboardScreen extends OsbScreen {
                         signed(fromSlider(lo)), signed(fromSlider(hi))))
                 .onCommit((lo, hi) -> SoundboardConfig.save()));
         pitchRange.bounds(rangeX, y, bodyX + bodyW - rangeX, ctl);
-        pitchRange.tooltip(tip("tooltip.opensoundboard.pitch_range"));
+        pitchRange.tooltip(tip("tooltip.opensoundboard.pitch_slider.random"));
         return y + ctl + gap;
     }
 
     private void setRandomPitch(boolean on) {
         SoundboardConfig.data.setRandomPitch(on);
         SoundboardConfig.save();
+        SoundboardAudioSystem.refreshPitches(); // unticking returns playing sounds to normal right away
         if (pitchRange != null) pitchRange.active = on;
-        if (pitchSlider != null) pitchSlider.active = on && selected != null;
+        if (pitchSlider != null) pitchSlider.active = on && (selected != null || !perSoundPitch());
     }
 
-    /** The fixed pitch slider moved: store it for the selected sound and retune it if it plays. */
+    /**
+     * The fixed pitch slider moved: store it (for the selected sound, or for all sounds) and
+     * retune what is playing.
+     */
     private void onFixedPitch(double semitones) {
-        if (selected == null) return;
-        SoundboardConfig.get(selectedKey()).setPitch((float) semitones);
-        if (SoundboardConfig.data.isFixedPitchActive()) {
-            SoundboardAudioSystem.setPitch(selectedKey(), SoundboardAudioSystem.semitonesToPitch(semitones));
+        if (perSoundPitch()) {
+            if (selected == null) return;
+            SoundboardConfig.get(selectedKey()).setPitch((float) semitones);
+            if (SoundboardConfig.data.isFixedPitchActive()) {
+                SoundboardAudioSystem.setPitch(selectedKey(), SoundboardAudioSystem.semitonesToPitch(semitones));
+            }
+        } else {
+            SoundboardConfig.data.setFixedPitch((float) semitones);
+            SoundboardAudioSystem.refreshPitches();
         }
     }
 
@@ -519,9 +536,14 @@ public class SoundboardScreen extends OsbScreen {
             pitchToggle.active = true;
             if (pitchRange != null) pitchRange.active = SoundboardConfig.data.isRandomPitch();
             if (pitchSlider != null) {
-                // Fixed pitch belongs to the selected sound, so it needs a selection.
-                pitchSlider.active = SoundboardConfig.data.isRandomPitch() && hasSelection;
-                pitchSlider.set(toSlider(hasSelection ? SoundboardConfig.get(selectedKey()).getPitch() : 0));
+                if (perSoundPitch()) {
+                    // A pitch per sound belongs to the selected sound, so it needs a selection.
+                    pitchSlider.active = SoundboardConfig.data.isRandomPitch() && hasSelection;
+                    pitchSlider.set(toSlider(hasSelection ? SoundboardConfig.get(selectedKey()).getPitch() : 0));
+                } else {
+                    pitchSlider.active = SoundboardConfig.data.isRandomPitch();
+                    pitchSlider.set(toSlider(SoundboardConfig.data.getFixedPitch()));
+                }
             }
         }
         if (master) {

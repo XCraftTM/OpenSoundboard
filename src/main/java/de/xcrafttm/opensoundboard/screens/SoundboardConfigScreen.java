@@ -185,11 +185,17 @@ public class SoundboardConfigScreen extends OsbScreen {
 
                 o.add(new Section("config.opensoundboard.section.sounds"));
                 o.add(new Bool("option.opensoundboard.syncAudio", cfg().isSyncAudio(), cfg()::setSyncAudio, false));
-                o.add(new Bool("option.opensoundboard.randomPitchControls", cfg().isRandomPitchControls(),
-                        cfg()::setRandomPitchControls, true));
+                o.add(new Bool("option.opensoundboard.randomPitchControls", cfg().isRandomPitchControls(), v -> {
+                    cfg().setRandomPitchControls(v);
+                    SoundboardAudioSystem.refreshPitches();
+                }, true));
                 if (cfg().isRandomPitchControls()) {
-                    o.add(new Bool("option.opensoundboard.fixedPitchPerSound", cfg().isFixedPitchPerSound(),
-                            cfg()::setFixedPitchPerSound, false));
+                    o.add(new Pick<>("option.opensoundboard.pitchMode",
+                            List.of(SoundboardConfig.PITCH_RANDOM, SoundboardConfig.PITCH_PER_SOUND, SoundboardConfig.PITCH_GLOBAL),
+                            cfg().getPitchMode(), v -> Component.translatable("config.opensoundboard.pitchMode." + v), v -> {
+                                cfg().setPitchMode(v);
+                                SoundboardAudioSystem.refreshPitches();
+                            }, false));
                 }
                 o.add(new Action("option.opensoundboard.stopAll", Component.translatable("gui.opensoundboard.stop_all"),
                         SoundboardAudioSystem::stopAll, true));

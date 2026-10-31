@@ -9,13 +9,14 @@ import net.minecraft.client.gui.Font;
 import java.util.List;
 
 /**
- * Modern settings row: a title with a short description (wrapped to at most two lines) on the
+ * Modern settings row: a title with a short description (wrapped to at most four lines) on the
  * left; the control itself is a separate widget placed in the reserved space on the right.
  * Clicking the row can forward to the control (e.g. toggling a checkbox).
  */
 public class OptionRow extends Widget {
 
-    public static final int MAX_DESCRIPTION_LINES = 2;
+    /** Rows grow to fit up to this many description lines; only longer text is cut with "...". */
+    public static final int MAX_DESCRIPTION_LINES = 4;
     private static final int PAD_Y = 6;
 
     private final String title;

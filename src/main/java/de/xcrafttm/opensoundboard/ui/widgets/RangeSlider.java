@@ -108,10 +108,12 @@ public class RangeSlider extends Widget {
 
         if (vanilla()) {
             c.sprite(hover ? "widget/slider_highlighted" : "widget/slider", x, y, w, h);
-            if (highX > lowX) c.fillRect(lowX, y + 2, highX - lowX, h - 4, 0x40FFFFFF);
-            c.fillRect(centerX, y + 2, 1, h - 4, 0x80FFFFFF);
-            drawVanillaHandle(c, lowX, hot == LOW);
-            drawVanillaHandle(c, highX, hot == HIGH);
+            c.fillRect(centerX, y + 2, 1, h - 4, active ? 0x80FFFFFF : 0x40FFFFFF);
+            if (active) {
+                if (highX > lowX) c.fillRect(lowX, y + 2, highX - lowX, h - 4, 0x40FFFFFF);
+                drawVanillaHandle(c, lowX, hot == LOW);
+                drawVanillaHandle(c, highX, hot == HIGH);
+            }
             if (readout != null) {
                 c.fitText(readout.apply(low, high).getString(), x + 4, c.centeredTextY(y, h), w - 8,
                         active ? UiStyle.VANILLA_TEXT : UiStyle.VANILLA_TEXT_DISABLED);
@@ -120,7 +122,7 @@ public class RangeSlider extends Widget {
         }
 
         c.fillRoundRect(x, y, w, h, Theme.field);
-        if (highX > lowX) c.fillRect(lowX, y + 1, highX - lowX, h - 2, active ? Theme.accentSoft : Theme.controlDisabled);
+        if (active && highX > lowX) c.fillRect(lowX, y + 1, highX - lowX, h - 2, Theme.accentSoft);
         c.fillRect(centerX, y + 1, 1, h - 2, Theme.borderStrong);
         c.roundBorder(x, y, w, h, hover ? Theme.borderStrong : Theme.border);
         if (active) {
