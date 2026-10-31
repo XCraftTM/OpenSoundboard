@@ -17,6 +17,8 @@ import de.xcrafttm.opensoundboard.tools.SoundboardAudioSystem;
 import de.xcrafttm.opensoundboard.tools.VoiceBackend;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
 import de.xcrafttm.opensoundboard.ui.widgets.Choice;
+import de.xcrafttm.opensoundboard.ui.widgets.RangeSlider;
+import de.xcrafttm.opensoundboard.ui.widgets.Toggle;
 import de.xcrafttm.opensoundboard.ui.widgets.ScrollList;
 import de.xcrafttm.opensoundboard.ui.widgets.TextField;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -67,14 +69,16 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
         report.section("Search bar: click and type", () -> searchBar(ctx, report));
         report.section("Search bar: typing anywhere", () -> typeAnywhere(ctx, report));
         report.section("Playback", () -> playback(ctx, report));
+        report.section("Random pitch", () -> randomPitch(ctx, report));
         report.section("Folders and same-named sounds", () -> folders(ctx, report));
         report.section("Keybind capture", () -> keybindCapture(ctx, report));
         report.section("Settings", () -> settings(ctx, report));
         report.section("Downloader", () -> downloader(ctx, report));
         report.section("Wheel editor and song picker", () -> wheelEditor(ctx, report));
         report.section("Vanilla style", () -> vanillaStyle(ctx, report));
-        report.section("In a world: keybinds and the sound wheel", () -> inWorld(ctx, report));
         report.section("Small window", () -> smallWindow(ctx, report));
+        // Last on purpose: leaving the world is where Fabric's test framework can hang (see inWorld).
+        report.section("In a world: keybinds and the sound wheel", () -> inWorld(ctx, report));
 
         ctx.runOnClient(c -> SoundboardAudioSystem.stopAll());
         ctx.setScreen(net.minecraft.client.gui.screens.TitleScreen::new); // the framework requires ending here
@@ -176,6 +180,208 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
         boolean onlyLast = ctx.computeOnClient(c -> playing(APPLAUSE) && !playing(LONG_SONG));
         report.check("\"Single song at a time\" keeps only the last sound, even when both were still loading", onlyLast);
         ctx.runOnClient(c -> SoundboardAudioSystem.stopAll());
+    }
+
+    private static void randomPitch(ClientGameTestContext ctx, Report report) {
+        // Off by default: no pitch row on the main screen, and sounds keep their pitch.
+        report.check("Random pitch controls are off by default", !ctx.computeOnClient(c -> SoundboardConfig.data.isRandomPitchControls()));
+        openSoundboard(ctx);
+        report.check("...so the main screen has no pitch row", ctx.computeOnClient(c -> Ui.field(soundboard(c), "pitchRange") == null));
+
+        // Turn the feature on in the settings (Audio page) like a player.
+        ctx.setScreen(() -> new SoundboardConfigScreen(null));
+        ctx.waitTicks(2);
+        ctx.runOnClient(c -> Ui.call(McCompat.screen(c), "switchPage", 1));
+        ctx.waitTicks(2);
+        ctx.runOnClient(c -> Ui.setField(Ui.field(McCompat.screen(c), "panel"), "scroll", 10_000));
+        ctx.waitTicks(2);
+        Toggle setting = ctx.computeOnClient(c -> {
+            // The last checkbox on the Audio page is "Random pitch controls".
+            Toggle last = null;
+            @SuppressWarnings("unchecked")
+            List<de.xcrafttm.opensoundboard.ui.Widget> children =
+                    (List<de.xcrafttm.opensoundboard.ui.Widget>) Ui.field(Ui.field(McCompat.screen(c), "panel"), "children");
+            for (var w : children) if (w instanceof Toggle t) last = t;
+            return last;
+        });
+        int togglesBefore = ctx.computeOnClient(c -> countToggles(McCompat.screen(c)));
+        Ui.click(ctx, setting);
+        ctx.waitTicks(2);
+        report.check("The setting turns the random pitch controls on", ctx.computeOnClient(c -> SoundboardConfig.data.isRandomPitchControls()));
+        int togglesAfter = ctx.computeOnClient(c -> countToggles(McCompat.screen(c)));
+        report.check("...and shows the \"Fixed pitch per sound\" option below it", togglesAfter == togglesBefore + 1, togglesBefore + " -> " + togglesAfter);
+        ctx.runOnClient(c -> Ui.setField(Ui.field(McCompat.screen(c), "panel"), "scroll", 10_000));
+        ctx.waitTicks(2);
+        report.screenshot("Settings - Audio with pitch controls");
+
+        ctx.runOnClient(c -> {
+            SoundboardConfig.data.setRandomPitch(false);
+            SoundboardConfig.data.setRandomPitchMin(SoundboardConfig.DEFAULT_RANDOM_PITCH_MIN);
+            SoundboardConfig.data.setRandomPitchMax(SoundboardConfig.DEFAULT_RANDOM_PITCH_MAX);
+        });
+        openSoundboard(ctx);
+        RangeSlider range = ctx.computeOnClient(c -> (RangeSlider) Ui.field(soundboard(c), "pitchRange"));
+        report.check("The pitch range is grayed out while random pitch is off", !ctx.computeOnClient(c -> range.active));
+        report.screenshot("Main screen - random pitch off");
+
+        // Tick the checkbox like a player.
+        Ui.click(ctx, ctx.computeOnClient(c -> (Toggle) Ui.field(soundboard(c), "pitchToggle")));
+        report.check("Ticking the checkbox turns random pitch on", ctx.computeOnClient(c -> SoundboardConfig.data.isRandomPitch()));
+        report.check("...and enables the pitch range", ctx.computeOnClient(c -> range.active));
+
+        // Drag the left handle all the way to the left: one octave down (0.5x).
+        double handleX = range.x + 1 + range.low() * (range.w - 2);
+        double midY = range.y + range.h / 2.0;
+        Ui.moveTo(ctx, handleX, midY);
+        ctx.waitTick();
+        ctx.getInput().holdMouse(Ui.leftButton());
+        ctx.waitTick();
+        for (int i = 1; i <= 5; i++) {
+            Ui.moveTo(ctx, handleX - (handleX - range.x + 10) * i / 5.0, midY);
+            ctx.waitTick();
+        }
+        ctx.getInput().releaseMouse(Ui.leftButton());
+        ctx.waitTick();
+        float lowest = ctx.computeOnClient(c -> SoundboardConfig.data.getRandomPitchMin());
+        float highest = ctx.computeOnClient(c -> SoundboardConfig.data.getRandomPitchMax());
+        report.check("Dragging the left handle to the end sets the lowest pitch to -12 (0.5x)", Math.abs(lowest - 0.5f) < 0.001f, lowest);
+        report.check("...without moving the right handle (+3)", Math.abs(highest - SoundboardConfig.DEFAULT_RANDOM_PITCH_MAX) < 0.001f, highest);
+        report.screenshot("Main screen - random pitch -12 to +3");
+
+        // Every play stays inside the chosen range (set the "wrong" way round on purpose).
+        ctx.runOnClient(c -> {
+            SoundboardConfig.data.setRandomPitchMin(0.7f);
+            SoundboardConfig.data.setRandomPitchMax(0.6f);
+        });
+        boolean inRange = true;
+        StringBuilder seen = new StringBuilder();
+        for (int i = 0; i < 4; i++) {
+            ctx.runOnClient(c -> SoundboardAudioSystem.play(SoundLibrary.find(LONG_SONG)));
+            Ui.waitUntil(ctx, 200, c -> !loading(LONG_SONG) && playing(LONG_SONG));
+            double pitch = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
+            seen.append(String.format(java.util.Locale.ROOT, "%.3f ", pitch));
+            inRange &= pitch >= 0.6 - 1e-6 && pitch <= 0.7 + 1e-6;
+        }
+        report.check("Each play picks a pitch between the two values (even when set lowest > highest)", inRange, seen.toString().trim());
+
+        // A sound at 1.5x really advances 1.5x as fast as real time; one at 1x advances at 1x.
+        double fast = playbackSpeed(ctx, 1.5f);
+        report.check("At 1.50x the sound plays 1.5 times as fast", fast > 1.3 && fast < 1.7, String.format(java.util.Locale.ROOT, "%.2fx", fast));
+        openSoundboard(ctx);
+        ctx.runOnClient(c -> Ui.call(soundboard(c), "select", SoundLibrary.find(LONG_SONG)));
+        ctx.waitTicks(3);
+        report.screenshot("Main screen shows the pitch");
+
+        ctx.runOnClient(c -> SoundboardConfig.data.setRandomPitch(false));
+        double normal = playbackSpeed(ctx, 1.0f);
+        report.check("With random pitch off, sounds play at normal speed", normal > 0.85 && normal < 1.15, String.format(java.util.Locale.ROOT, "%.2fx", normal));
+
+        // Previews stay at the normal pitch even with random pitch on.
+        ctx.runOnClient(c -> {
+            SoundboardAudioSystem.stopAll();
+            SoundboardConfig.data.setRandomPitch(true);
+            SoundboardAudioSystem.preview(SoundLibrary.find(LONG_SONG), 1f, 0f);
+        });
+        String preview = SoundboardAudioSystem.previewKey(LONG_SONG);
+        Ui.waitUntil(ctx, 200, c -> !loading(preview) && playing(preview));
+        double previewPitch = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(preview));
+        report.check("Previews play at the normal pitch", previewPitch == 1.0, previewPitch);
+
+        fixedPitch(ctx, report);
+
+        // With the feature switched off in the settings, the checkbox no longer applies.
+        ctx.runOnClient(c -> {
+            SoundboardAudioSystem.stopAll();
+            SoundboardConfig.data.setRandomPitchControls(false);
+            SoundboardConfig.data.setRandomPitchMin(1.5f);
+            SoundboardConfig.data.setRandomPitchMax(1.5f);
+            SoundboardAudioSystem.play(SoundLibrary.find(LONG_SONG));
+        });
+        Ui.waitUntil(ctx, 200, c -> !loading(LONG_SONG) && playing(LONG_SONG));
+        double offPitch = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
+        report.check("Turning the setting off plays sounds at normal pitch again", offPitch == 1.0, offPitch);
+
+        ctx.runOnClient(c -> {
+            SoundboardAudioSystem.stopAll();
+            SoundboardConfig.data.setRandomPitch(false);
+            SoundboardConfig.data.setRandomPitchMin(SoundboardConfig.DEFAULT_RANDOM_PITCH_MIN);
+            SoundboardConfig.data.setRandomPitchMax(SoundboardConfig.DEFAULT_RANDOM_PITCH_MAX);
+            SoundboardConfig.save();
+        });
+    }
+
+    /** "Fixed pitch per sound": one slider for the selected sound's own pitch. */
+    private static void fixedPitch(ClientGameTestContext ctx, Report report) {
+        ctx.runOnClient(c -> {
+            SoundboardAudioSystem.stopAll();
+            SoundboardConfig.data.setRandomPitchControls(true);
+            SoundboardConfig.data.setFixedPitchPerSound(true);
+            SoundboardConfig.data.setRandomPitch(true);
+        });
+        openSoundboard(ctx);
+        de.xcrafttm.opensoundboard.ui.widgets.Slider slider = ctx.computeOnClient(c ->
+                (de.xcrafttm.opensoundboard.ui.widgets.Slider) Ui.field(soundboard(c), "pitchSlider"));
+        report.check("Fixed pitch mode shows one pitch slider instead of the range",
+                slider != null && ctx.computeOnClient(c -> Ui.field(soundboard(c), "pitchRange") == null));
+        report.check("...which is grayed out until a sound is selected", !ctx.computeOnClient(c -> slider.active));
+
+        ctx.runOnClient(c -> Ui.call(soundboard(c), "select", SoundLibrary.find(LONG_SONG)));
+        ctx.waitTick();
+        report.check("Selecting a sound enables it", ctx.computeOnClient(c -> slider.active));
+
+        // Click the right end: +12, one octave up.
+        Ui.click(ctx, slider.x + slider.w - 1, slider.y + slider.h / 2.0);
+        float saved = ctx.computeOnClient(c -> SoundboardConfig.get(LONG_SONG).getPitch());
+        report.check("Clicking the right end sets the sound's pitch to +12", saved == 12f, saved);
+        ctx.runOnClient(c -> SoundboardAudioSystem.play(SoundLibrary.find(LONG_SONG)));
+        Ui.waitUntil(ctx, 200, c -> !loading(LONG_SONG) && playing(LONG_SONG));
+        double playing = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
+        report.check("The sound plays at its own pitch (+12 = 2x)", Math.abs(playing - 2.0) < 1e-6, playing);
+        ctx.waitTicks(3);
+        report.screenshot("Main screen - fixed pitch +12");
+
+        // Click the middle while it plays: back to normal, right away.
+        Ui.click(ctx, slider.x + 1 + 0.5 * (slider.w - 2), slider.y + slider.h / 2.0);
+        double live = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(LONG_SONG));
+        report.check("Moving the slider retunes the playing sound immediately", Math.abs(live - 1.0) < 1e-6, live);
+
+        ctx.runOnClient(c -> SoundboardAudioSystem.play(SoundLibrary.find(APPLAUSE)));
+        Ui.waitUntil(ctx, 200, c -> !loading(APPLAUSE) && playing(APPLAUSE));
+        double other = ctx.computeOnClient(c -> SoundboardAudioSystem.getPitch(APPLAUSE));
+        report.check("Other sounds keep their own pitch (normal)", other == 1.0, other);
+
+        ctx.runOnClient(c -> {
+            SoundboardAudioSystem.stopAll();
+            SoundboardConfig.get(LONG_SONG).setPitch(0f);
+            SoundboardConfig.data.setFixedPitchPerSound(false);
+        });
+    }
+
+    private static int countToggles(Object configScreen) {
+        @SuppressWarnings("unchecked")
+        List<de.xcrafttm.opensoundboard.ui.Widget> children =
+                (List<de.xcrafttm.opensoundboard.ui.Widget>) Ui.field(Ui.field(configScreen, "panel"), "children");
+        int count = 0;
+        for (var w : children) if (w instanceof Toggle) count++;
+        return count;
+    }
+
+    /** Plays Long Song at a fixed pitch and measures how fast its position moves against the wall clock. */
+    private static double playbackSpeed(ClientGameTestContext ctx, float pitch) {
+        ctx.runOnClient(c -> {
+            SoundboardAudioSystem.stopAll();
+            SoundboardConfig.data.setRandomPitchMin(pitch);
+            SoundboardConfig.data.setRandomPitchMax(pitch);
+            SoundboardAudioSystem.playFile(SoundLibrary.find(LONG_SONG), 1f, 1f, 0f, false);
+        });
+        Ui.waitUntil(ctx, 200, c -> !loading(LONG_SONG) && playing(LONG_SONG));
+        ctx.waitTicks(10); // let the audio output settle
+        long songStart = ctx.computeOnClient(c -> SoundboardAudioSystem.getTimeMillis(LONG_SONG));
+        long wallStart = System.nanoTime();
+        while (System.nanoTime() - wallStart < 3_000_000_000L) ctx.waitTick();
+        long songEnd = ctx.computeOnClient(c -> SoundboardAudioSystem.getTimeMillis(LONG_SONG));
+        double wallMillis = (System.nanoTime() - wallStart) / 1_000_000.0;
+        return (songEnd - songStart) / wallMillis;
     }
 
     private static void folders(ClientGameTestContext ctx, Report report) {
@@ -413,8 +619,16 @@ public class OpenSoundboardGameTest implements FabricClientGameTest {
             // Leave only once the server is running normally (not paused), see pauseOnLostFocus above.
             Ui.waitUntil(ctx, 40, c -> c.getSingleplayerServer() == null || !c.getSingleplayerServer().isPaused());
             ctx.waitTicks(2);
+            // Fabric's test framework occasionally deadlocks its own threads while leaving a world
+            // (client waits for the server to stop, server waits for the next test tick). Save the
+            // results first; testAllVersions recognises the marker and reports the hang separately.
+            report.info(LEAVING_WORLD_MARKER);
+            report.write();
         }
     }
+
+    /** Last report line before leaving the world; see testAllVersions in stonecutter.gradle.kts. */
+    static final String LEAVING_WORLD_MARKER = "All checks done; leaving the test world.";
 
     /** Minecraft's default window (854x480, automatic GUI scale): records how much of the list fits. */
     private static void smallWindow(ClientGameTestContext ctx, Report report) {

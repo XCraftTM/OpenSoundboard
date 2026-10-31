@@ -23,6 +23,8 @@ public class Slider extends Widget {
     private Function<Double, Component> readout;
     private int steps = 0;
     private boolean dragging = false;
+    /** Position of a reference mark (e.g. "unchanged" in the middle), or negative for none. */
+    private double mark = -1;
 
     public Slider(double value, Consumer<Double> onChange) {
         this.value = clamp(value);
@@ -37,6 +39,12 @@ public class Slider extends Widget {
     /** Snap to {@code steps} equal intervals (e.g. 8 steps = 0, 0.125, ... 1). */
     public Slider steps(int steps) {
         this.steps = Math.max(0, steps);
+        return this;
+    }
+
+    /** Draw a thin reference mark at {@code value} (0..1), e.g. 0.5 for a centered "unchanged". */
+    public Slider mark(double value) {
+        this.mark = clamp(value);
         return this;
     }
 
@@ -63,6 +71,9 @@ public class Slider extends Widget {
         boolean hover = active && (dragging || c.hovered(x, y, w, h));
         if (UiStyle.useVanillaComponents()) {
             c.sprite(hover ? "widget/slider_highlighted" : "widget/slider", x, y, w, h);
+            if (mark >= 0) {
+                c.fillRect(x + VANILLA_HANDLE_W / 2 + (int) Math.round(mark * (w - VANILLA_HANDLE_W)), y + 2, 1, h - 4, 0x80FFFFFF);
+            }
             int hx = x + (int) Math.round(value * (w - VANILLA_HANDLE_W));
             c.sprite(hover ? "widget/slider_handle_highlighted" : "widget/slider_handle", hx, y, VANILLA_HANDLE_W, h);
             if (readout != null) {
@@ -78,6 +89,7 @@ public class Slider extends Widget {
         if (fillW > 0) {
             c.fillRect(x + 1, y + 1, fillW, h - 2, active ? Theme.accentSoft : Theme.controlDisabled);
         }
+        if (mark >= 0) c.fillRect(x + 1 + (int) Math.round(mark * inner), y + 1, 1, h - 2, Theme.borderStrong);
         c.roundBorder(x, y, w, h, hover ? Theme.borderStrong : Theme.border);
         if (active) {
             int handleW = hover ? 3 : 2;

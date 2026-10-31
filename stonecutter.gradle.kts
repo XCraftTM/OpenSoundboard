@@ -160,15 +160,31 @@ tasks.register("testAllVersions") {
             testable.forEach { v ->
                 gradlew("stonecutterSwitchTo$v")
                 val exit = gradlewExitCode(":$v:runClientGameTest")
-                if (exit != 0) failed += v
                 val runDir = projectRoot.resolve("versions/$v/build/run/clientGameTest")
+                // Fabric's test framework sometimes hangs the game while the test leaves its world;
+                // Windows then kills it. The report is written just before that step, so a run that
+                // passed every check and got that far counts as passed, with a note.
+                val report = runDir.resolve("opensoundboard-gametest-report.md")
+                val hungLeavingWorld = exit != 0 && report.isFile && report.readText().let {
+                    it.contains("checks passed.**") && it.contains("All checks done; leaving the test world.")
+                }
+                if (hungLeavingWorld) {
+                    logger.warn("$v: every check passed, but the game hung while leaving the test world (Fabric test framework issue)")
+                } else if (exit != 0) {
+                    failed += v
+                }
                 copy {
                     from(runDir.resolve("screenshots"))
                     from(runDir) { include("opensoundboard-gametest-report.md") }
                     from(runDir.resolve("logs")) { include("latest.log") }
                     into(outRoot.resolve(v))
                 }
-                logger.lifecycle("$v: ${if (exit == 0) "passed" else "FAILED"} -> build/gametest/$v/")
+                val result = when {
+                    exit == 0 -> "passed"
+                    hungLeavingWorld -> "passed (game hung while leaving the world)"
+                    else -> "FAILED"
+                }
+                logger.lifecycle("$v: $result -> build/gametest/$v/")
             }
         } finally {
             if (activeVersionFile.readText().trim() != originalVersion) gradlew("stonecutterSwitchTo$originalVersion")

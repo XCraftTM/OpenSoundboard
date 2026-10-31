@@ -538,7 +538,7 @@ public final class SoundboardAudioSystem {
                 return;
             }
             durationCache.putIfAbsent(key, (long) pcmData.length);
-            PlayingSound sound = new PlayingSound(id, file, pcmData, localVol, playerVol, previewOnly);
+            PlayingSound sound = new PlayingSound(id, file, pcmData, localVol, playerVol, previewOnly, previewOnly ? 1.0 : pitchFor(key));
             if (startProgress >= 0f) {
                 sound.setCursor(startProgress);
             } else {
@@ -553,6 +553,41 @@ public final class SoundboardAudioSystem {
                 activeSounds.add(sound);
             }
         });
+    }
+
+    /**
+     * The pitch for a sound that is starting: 1 normally; with pitch on, the sound's own fixed pitch
+     * ("fixed pitch per sound") or a random value between the lowest and highest pitch from the
+     * settings (the two may be set either way round). Previews always play at the normal pitch, so
+     * you hear the sound as it is.
+     */
+    private static double pitchFor(String key) {
+        SoundboardConfig cfg = SoundboardConfig.data;
+        if (cfg == null || !cfg.isRandomPitchActive()) return 1.0;
+        if (cfg.isFixedPitchActive()) return semitonesToPitch(SoundboardConfig.get(key).getPitch());
+        double low = Math.min(cfg.getRandomPitchMin(), cfg.getRandomPitchMax());
+        double high = Math.max(cfg.getRandomPitchMin(), cfg.getRandomPitchMax());
+        return high > low ? java.util.concurrent.ThreadLocalRandom.current().nextDouble(low, high) : low;
+    }
+
+    /** Pitch multiplier for semitones, limited to one octave either way (-12 = 0.5x, +12 = 2x). */
+    public static double semitonesToPitch(double semitones) {
+        return Math.pow(2, Math.max(-12, Math.min(12, semitones)) / 12.0);
+    }
+
+    /** Change the pitch of {@code key} while it plays (fixed pitch per sound); previews keep theirs. */
+    public static void setPitch(String key, double pitch) {
+        for (PlayingSound s : activeSounds) {
+            if (s.key.equals(key) && !s.previewOnly) s.pitch = pitch;
+        }
+    }
+
+    /** The pitch {@code key} is playing at (1 = normal), or 1 if it is not playing. */
+    public static double getPitch(String key) {
+        for (PlayingSound s : activeSounds) {
+            if (s.key.equals(key)) return s.pitch;
+        }
+        return 1.0;
     }
 
     private static final String PREVIEW_PREFIX = "\0preview:";
@@ -682,37 +717,44 @@ public final class SoundboardAudioSystem {
         final File file;
         final boolean previewOnly;
         private final short[] samples;
+        /** Playback rate: 1 = normal, 1.5 = 50 % faster and higher, like Minecraft's sound pitch. */
+        volatile double pitch;
 
         volatile float localVolume;
         volatile float playerVolume;
 
-        private volatile int cursor = 0;
+        /** Read position in source samples; fractional when the pitch is not 1. */
+        private volatile double cursor = 0;
         volatile boolean isPaused = false;
         volatile boolean isLooping = false;
 
-        private PlayingSound(String key, File file, short[] samples, float localVolume, float playerVolume, boolean previewOnly) {
+        private PlayingSound(String key, File file, short[] samples, float localVolume, float playerVolume,
+                             boolean previewOnly, double pitch) {
             this.key = key;
             this.file = file;
             this.samples = samples;
             this.localVolume = localVolume;
             this.playerVolume = playerVolume;
             this.previewOnly = previewOnly;
+            this.pitch = pitch;
         }
 
         boolean isFinished() {
             return !isLooping && cursor >= samples.length;
         }
 
+        /** How many output samples are left (all of {@code frame} while looping). */
         int remaining(int frame) {
-            return isLooping ? frame : (samples.length - cursor);
+            if (isLooping) return frame;
+            return (int) Math.max(0, Math.ceil((samples.length - cursor) / pitch));
         }
 
         float progress() {
-            return samples.length == 0 ? 0f : (float) cursor / samples.length;
+            return samples.length == 0 ? 0f : (float) (cursor / samples.length);
         }
 
         long timeMillis() {
-            return (long) cursor * 1000L / SAMPLE_RATE;
+            return (long) (cursor * 1000L / SAMPLE_RATE);
         }
 
         long durationMillis() {
@@ -720,21 +762,31 @@ public final class SoundboardAudioSystem {
         }
 
         void setCursor(float progress) {
-            cursor = Math.max(0, Math.min(samples.length, (int) (progress * samples.length)));
+            cursor = Math.max(0, Math.min(samples.length, (double) progress * samples.length));
         }
 
         void skip(int seconds) {
-            cursor = Math.max(0, Math.min(samples.length, cursor + seconds * SAMPLE_RATE));
+            cursor = Math.max(0, Math.min(samples.length, cursor + (double) seconds * SAMPLE_RATE));
         }
 
         short readNext() {
-            int c = cursor;
+            double c = cursor;
             if (c >= samples.length) {
                 if (!isLooping) return 0;
-                c = 0;
+                c %= samples.length;
             }
-            cursor = c + 1;
-            return samples[c];
+            int index = (int) c;
+            double frac = c - index;
+            short value;
+            if (frac == 0) {
+                value = samples[index];
+            } else {
+                // Linear interpolation between neighbouring samples keeps pitched sounds smooth.
+                int next = index + 1 < samples.length ? index + 1 : (isLooping ? 0 : index);
+                value = (short) Math.round(samples[index] * (1 - frac) + samples[next] * frac);
+            }
+            cursor = c + pitch;
+            return value;
         }
     }
 }

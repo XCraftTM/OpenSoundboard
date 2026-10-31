@@ -16,6 +16,11 @@ public class SoundboardConfig {
     public static final String DEFAULT_ACCENT_COLOR = "#5FAE6E";
     public static final String DEFAULT_SURFACE_TONE = "graphite";
     public static final float DEFAULT_PANEL_OPACITY = 0.96f;
+    public static final float MIN_PITCH = 0.5f;
+    public static final float MAX_PITCH = 2.0f;
+    /** -3 and +3 semitones (the main screen's pitch range slider works in semitones). */
+    public static final float DEFAULT_RANDOM_PITCH_MIN = 0.8408964f;
+    public static final float DEFAULT_RANDOM_PITCH_MAX = 1.1892071f;
 
     private static final File BASE_DIR = new File(PlatformBootstrap.client().configDirectory(), "opensoundboard");
 
@@ -45,6 +50,15 @@ public class SoundboardConfig {
     boolean singleSongAtATime = true;
     boolean loopAll = false;
     boolean syncAudio = false;
+    // Random pitch: each play picks a speed/pitch between the two values (1.0 = unchanged). The
+    // controls only show on the main screen (and only apply) when randomPitchControls is on.
+    boolean randomPitchControls = false;
+    /** Instead of a random range, each sound plays at its own fixed pitch (SoundData.pitch). */
+    boolean fixedPitchPerSound = false;
+    /** The main screen's pitch checkbox: pitch changes apply (random range, or fixed per sound). */
+    boolean randomPitch = false;
+    float randomPitchMin = DEFAULT_RANDOM_PITCH_MIN;
+    float randomPitchMax = DEFAULT_RANDOM_PITCH_MAX;
     int skipAmountSeconds = 5;
     String keybindMode = "play_stop";
     int wheelSoundsPerPage = 8;
@@ -108,11 +122,23 @@ public class SoundboardConfig {
         WheelLayoutConfig.load();
     }
 
+    /** Whether pitch changes apply: the feature is enabled in the settings and ticked on the main screen. */
+    public boolean isRandomPitchActive() {
+        return randomPitchControls && randomPitch;
+    }
+
+    /** Whether each sound plays at its own fixed pitch instead of a random one. */
+    public boolean isFixedPitchActive() {
+        return isRandomPitchActive() && fixedPitchPerSound;
+    }
+
     private void normalizeAccessibility() {
         uiWidthScale = normalizeScale(uiWidthScale, DEFAULT_UI_WIDTH_SCALE, 0.6f, 1.0f);
         uiHeightScale = normalizeScale(uiHeightScale, DEFAULT_UI_HEIGHT_SCALE, 0.7f, 1.0f);
         fontScale = normalizeScale(fontScale, DEFAULT_FONT_SCALE, 0.75f, 1.25f);
         panelOpacity = normalizeScale(panelOpacity, DEFAULT_PANEL_OPACITY, 0.6f, 1.0f);
+        randomPitchMin = normalizeScale(randomPitchMin, DEFAULT_RANDOM_PITCH_MIN, MIN_PITCH, MAX_PITCH);
+        randomPitchMax = normalizeScale(randomPitchMax, DEFAULT_RANDOM_PITCH_MAX, MIN_PITCH, MAX_PITCH);
         if (parseHexColor(accentColor) < 0) accentColor = DEFAULT_ACCENT_COLOR;
         if (surfaceTone == null || surfaceTone.isBlank()) surfaceTone = DEFAULT_SURFACE_TONE;
     }
@@ -213,7 +239,8 @@ public class SoundboardConfig {
                 && d.localVolume == 1.0f
                 && d.playerVolume == 1.0f
                 && d.keybind == null
-                && !d.favorite;
+                && !d.favorite
+                && d.pitch == 0f;
     }
 
     /**
@@ -247,6 +274,8 @@ public class SoundboardConfig {
         float playerVolume = 1.0f;
         KeyBind keybind = null;
         boolean favorite = false;
+        /** Fixed pitch in semitones (-12..+12, 0 = normal), used in "fixed pitch per sound" mode. */
+        float pitch = 0f;
     }
 
     private static final class LazySoundData extends SoundData {
@@ -271,7 +300,14 @@ public class SoundboardConfig {
             stored.playerVolume = this.playerVolume;
             stored.keybind = this.keybind;
             stored.favorite = this.favorite;
+            stored.pitch = this.pitch;
             putStored(key, stored);
+        }
+
+        @Override
+        public void setPitch(float pitch) {
+            this.pitch = pitch;
+            syncToStore();
         }
 
         @Override

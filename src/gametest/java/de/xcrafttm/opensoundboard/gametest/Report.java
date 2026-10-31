@@ -93,24 +93,33 @@ final class Report {
         return path;
     }
 
-    /** Write the report; throws if any check failed so the Gradle run fails too. */
-    void finish() {
+    /**
+     * Write the report as it stands. Called before the test leaves its world too: Fabric's test
+     * framework sometimes hangs the game while leaving a world, and the results must survive that.
+     */
+    void write() {
+        List<String> out = new ArrayList<>(lines);
         // Summary right under "Minecraft <version>" at the top.
-        lines.add(3, "");
-        lines.add(4, (failures.isEmpty() ? "**All " + checks + " checks passed.**" : "**" + failures.size() + " of " + checks + " checks failed.**")
+        out.add(3, "");
+        out.add(4, (failures.isEmpty() ? "**All " + checks + " checks passed.**" : "**" + failures.size() + " of " + checks + " checks failed.**")
                 + " " + screenshots + " screenshots.");
         if (!failures.isEmpty()) {
-            lines.add(5, "");
-            lines.add(6, "Failed:");
-            for (int i = 0; i < failures.size(); i++) lines.add(7 + i, "- " + failures.get(i));
+            out.add(5, "");
+            out.add(6, "Failed:");
+            for (int i = 0; i < failures.size(); i++) out.add(7 + i, "- " + failures.get(i));
         }
         Path file = FabricLoader.getInstance().getGameDir().resolve("opensoundboard-gametest-report.md");
         try {
-            Files.write(file, lines, StandardCharsets.UTF_8);
+            Files.write(file, out, StandardCharsets.UTF_8);
             LOGGER.info("[GameTest] Report written to {}", file.toAbsolutePath());
         } catch (IOException e) {
             LOGGER.error("[GameTest] Could not write the report", e);
         }
+    }
+
+    /** Write the final report; throws if any check failed so the Gradle run fails too. */
+    void finish() {
+        write();
         if (!failures.isEmpty()) {
             throw new AssertionError(failures.size() + " check(s) failed:\n - " + String.join("\n - ", failures));
         }

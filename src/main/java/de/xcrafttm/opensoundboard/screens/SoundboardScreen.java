@@ -16,9 +16,11 @@ import de.xcrafttm.opensoundboard.ui.UiStyle;
 import de.xcrafttm.opensoundboard.ui.Widget;
 import de.xcrafttm.opensoundboard.ui.widgets.Breadcrumbs;
 import de.xcrafttm.opensoundboard.ui.widgets.Button;
+import de.xcrafttm.opensoundboard.ui.widgets.RangeSlider;
 import de.xcrafttm.opensoundboard.ui.widgets.ScrollList;
 import de.xcrafttm.opensoundboard.ui.widgets.Slider;
 import de.xcrafttm.opensoundboard.ui.widgets.TextField;
+import de.xcrafttm.opensoundboard.ui.widgets.Toggle;
 import net.minecraft.network.chat.Component;
 
 import java.io.File;
@@ -51,6 +53,10 @@ public class SoundboardScreen extends OsbScreen {
     private TextField timeField;
     private Button pauseBtn;
     private Button loopBtn;
+    private Toggle pitchToggle;
+    private RangeSlider pitchRange;
+    /** Single slider for the selected sound's pitch ("fixed pitch per sound" mode). */
+    private Slider pitchSlider;
     private int detailsTop;
 
     private File selected = null;
@@ -139,6 +145,7 @@ public class SoundboardScreen extends OsbScreen {
         // Details block at the bottom of the body
         int lh = (int) Math.ceil(this.font.lineHeight * UiStyle.fontScale());
         int detailsH = Math.max(lh, ctl) + gap + ctl + gap + ctl + gap + ctl;
+        if (SoundboardConfig.data.isRandomPitchControls()) detailsH += ctl + gap; // the random pitch row
         detailsTop = bodyY + bodyH - detailsH;
 
         list = add(new ScrollList().framed(true).gap(vanilla ? 2 : 1));
@@ -209,6 +216,16 @@ public class SoundboardScreen extends OsbScreen {
         timeline.bounds(bodyX, y, bodyW, ctl);
         y += ctl + gap;
 
+        // Random pitch (applies to every sound), when enabled in the settings: a checkbox, then a
+        // two-handle range in semitones from one octave down (left) through unchanged (middle
+        // mark) to one octave up (right).
+        pitchToggle = null;
+        pitchRange = null;
+        pitchSlider = null;
+        if (SoundboardConfig.data.isRandomPitchControls()) {
+            y = buildPitchRow(y, ctl, gap);
+        }
+
         int timeW = vanilla() ? 64 : 58;
         timeField = detail(new TextField().maxLength(10).placeholder("0:00.0").onChange(t -> {
             if (selected == null || !timeField.isFocused()) return;
@@ -240,6 +257,87 @@ public class SoundboardScreen extends OsbScreen {
         rx -= tbw + gap;
         loopBtn = detail(new Button(Icons.LOOP, null, b -> toggleLoop()).secondary());
         loopBtn.bounds(rx, y, tbw, ctl).tooltip(tip("gui.opensoundboard.loop"));
+    }
+
+    // ---------------------------------------------------------------- random pitch
+
+    /** The range slider covers one octave down to one octave up (pitch 0.5x to 2x). */
+    private static final int PITCH_SEMITONES = 12;
+
+    /**
+     * Checkbox + pitch slider at {@code y}; returns the y below the row. The slider is a random
+     * range, or with "fixed pitch per sound" a single pitch for the selected sound.
+     */
+    private int buildPitchRow(int y, int ctl, int gap) {
+        boolean fixed = SoundboardConfig.data.isFixedPitchPerSound();
+        int boxSize = vanilla() ? ctl : 12;
+        pitchToggle = detail(new Toggle(SoundboardConfig.data.isRandomPitch(), this::setRandomPitch));
+        pitchToggle.bounds(bodyX, y + (ctl - boxSize) / 2, boxSize, boxSize);
+        pitchToggle.tooltip(tip(fixed ? "tooltip.opensoundboard.fixed_pitch" : "tooltip.opensoundboard.random_pitch"));
+        int rangeX = bodyX + boxSize + gap + 2;
+        if (fixed) {
+            pitchSlider = detail(new Slider(0.5, v -> onFixedPitch(fromSlider(v)))
+                    .steps(PITCH_SEMITONES * 2)
+                    .mark(0.5)
+                    .readout(v -> Component.translatable("gui.opensoundboard.pitch_fixed", signed(fromSlider(v))))
+                    .onCommit(v -> SoundboardConfig.save()));
+            pitchSlider.bounds(rangeX, y, bodyX + bodyW - rangeX, ctl);
+            pitchSlider.tooltip(tip("tooltip.opensoundboard.pitch_fixed"));
+            return y + ctl + gap;
+        }
+        pitchRange = detail(new RangeSlider(
+                toSlider(semitones(SoundboardConfig.data.getRandomPitchMin())),
+                toSlider(semitones(SoundboardConfig.data.getRandomPitchMax())),
+                (lo, hi) -> {
+                    SoundboardConfig.data.setRandomPitchMin(pitch(fromSlider(lo)));
+                    SoundboardConfig.data.setRandomPitchMax(pitch(fromSlider(hi)));
+                })
+                .steps(PITCH_SEMITONES * 2)
+                .readout((lo, hi) -> Component.translatable("gui.opensoundboard.pitch_range",
+                        signed(fromSlider(lo)), signed(fromSlider(hi))))
+                .onCommit((lo, hi) -> SoundboardConfig.save()));
+        pitchRange.bounds(rangeX, y, bodyX + bodyW - rangeX, ctl);
+        pitchRange.tooltip(tip("tooltip.opensoundboard.pitch_range"));
+        return y + ctl + gap;
+    }
+
+    private void setRandomPitch(boolean on) {
+        SoundboardConfig.data.setRandomPitch(on);
+        SoundboardConfig.save();
+        if (pitchRange != null) pitchRange.active = on;
+        if (pitchSlider != null) pitchSlider.active = on && selected != null;
+    }
+
+    /** The fixed pitch slider moved: store it for the selected sound and retune it if it plays. */
+    private void onFixedPitch(double semitones) {
+        if (selected == null) return;
+        SoundboardConfig.get(selectedKey()).setPitch((float) semitones);
+        if (SoundboardConfig.data.isFixedPitchActive()) {
+            SoundboardAudioSystem.setPitch(selectedKey(), SoundboardAudioSystem.semitonesToPitch(semitones));
+        }
+    }
+
+    /** Semitones for a pitch multiplier: 0 = unchanged, +12 = an octave up (2x). */
+    static double semitones(double pitch) {
+        return 12 * Math.log(pitch) / Math.log(2);
+    }
+
+    static float pitch(double semitones) {
+        return (float) Math.pow(2, semitones / 12);
+    }
+
+    private static double toSlider(double semitones) {
+        return (semitones + PITCH_SEMITONES) / (2.0 * PITCH_SEMITONES);
+    }
+
+    private static double fromSlider(double value) {
+        return Math.round(value * 2 * PITCH_SEMITONES) - PITCH_SEMITONES;
+    }
+
+    /** "+3", "0", or "-3". */
+    private static String signed(double semitones) {
+        long rounded = Math.round(semitones);
+        return rounded > 0 ? "+" + rounded : String.valueOf(rounded);
     }
 
     // ---------------------------------------------------------------- scan / list
@@ -416,6 +514,16 @@ public class SoundboardScreen extends OsbScreen {
         for (Widget w : details) w.active = hasSelection;
         loopBtn.active = true;
         loopBtn.setSelected(SoundboardConfig.data.isLoopAll());
+        // Random pitch applies to every sound, so it works without a selection too.
+        if (pitchToggle != null) {
+            pitchToggle.active = true;
+            if (pitchRange != null) pitchRange.active = SoundboardConfig.data.isRandomPitch();
+            if (pitchSlider != null) {
+                // Fixed pitch belongs to the selected sound, so it needs a selection.
+                pitchSlider.active = SoundboardConfig.data.isRandomPitch() && hasSelection;
+                pitchSlider.set(toSlider(hasSelection ? SoundboardConfig.get(selectedKey()).getPitch() : 0));
+            }
+        }
         if (master) {
             localSlider.active = true;
             playerSlider.active = true;
@@ -473,6 +581,11 @@ public class SoundboardScreen extends OsbScreen {
                     vanilla ? UiStyle.VANILLA_TEXT_MUTED : Theme.textMuted);
         } else {
             String name = GuiTools.baseName(selected);
+            double pitch = SoundboardAudioSystem.getPitch(selectedKey());
+            if (Math.abs(pitch - 1.0) > 0.001) {
+                String semis = String.format(java.util.Locale.ROOT, "%+.1f", semitones(pitch));
+                name += " · " + Component.translatable("gui.opensoundboard.pitch_now", semis).getString();
+            }
             int nameX = bodyX;
             if (SoundboardAudioSystem.isPlaying(selectedKey())) {
                 c.icon(Icons.NOTE, bodyX, detailsTop + (lineH - Icons.NOTE.height) / 2, vanilla ? 0xFFFFFF55 : Theme.accent);

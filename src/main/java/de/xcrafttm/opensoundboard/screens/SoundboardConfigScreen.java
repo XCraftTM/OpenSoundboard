@@ -185,6 +185,12 @@ public class SoundboardConfigScreen extends OsbScreen {
 
                 o.add(new Section("config.opensoundboard.section.sounds"));
                 o.add(new Bool("option.opensoundboard.syncAudio", cfg().isSyncAudio(), cfg()::setSyncAudio, false));
+                o.add(new Bool("option.opensoundboard.randomPitchControls", cfg().isRandomPitchControls(),
+                        cfg()::setRandomPitchControls, true));
+                if (cfg().isRandomPitchControls()) {
+                    o.add(new Bool("option.opensoundboard.fixedPitchPerSound", cfg().isFixedPitchPerSound(),
+                            cfg()::setFixedPitchPerSound, false));
+                }
                 o.add(new Action("option.opensoundboard.stopAll", Component.translatable("gui.opensoundboard.stop_all"),
                         SoundboardAudioSystem::stopAll, true));
             }
@@ -250,7 +256,6 @@ public class SoundboardConfigScreen extends OsbScreen {
     private static String percent(double value) {
         return Math.round(value * 100) + "%";
     }
-
     // ---- layout -----------------------------------------------------------------------------
 
     @Override
